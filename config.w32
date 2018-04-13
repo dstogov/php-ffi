@@ -1,0 +1,7 @@
+ARG_ENABLE('ffi', 'ffi support', 'no');
+
+if (PHP_FFI != 'no') {
+	AC_DEFINE('HAVE_FFI', 1, 'ffi support enabled');
+
+	EXTENSION('ffi', 'ffi.c', null, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1');
+}
