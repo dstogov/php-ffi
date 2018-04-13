@@ -37,6 +37,14 @@ ZEND_END_MODULE_GLOBALS(ffi)
 
 ZEND_EXTERN_MODULE_GLOBALS(ffi)
 
+#ifdef PHP_WIN32
+# define PHP_FFI_API __declspec(dllexport)
+#elif defined(__GNUC__) && __GNUC__ >= 4
+# define PHP_FFI_API __attribute__ ((visibility("default")))
+#else
+# define PHP_FFI_API
+#endif
+
 #define FFI_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(ffi, v)
 
 #define ZEND_FFI_DCL_VOID            (1<<0)

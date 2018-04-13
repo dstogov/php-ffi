@@ -44,7 +44,9 @@ typedef enum _zend_ffi_type_kind {
 	ZEND_FFI_TYPE_VOID       = FFI_TYPE_VOID,
 	ZEND_FFI_TYPE_FLOAT      = FFI_TYPE_FLOAT,
 	ZEND_FFI_TYPE_DOUBLE     = FFI_TYPE_DOUBLE,
+#ifndef PHP_WIN32
 	ZEND_FFI_TYPE_LONGDOUBLE = FFI_TYPE_LONGDOUBLE,
+#endif
 	ZEND_FFI_TYPE_UINT8      = FFI_TYPE_UINT8,
 	ZEND_FFI_TYPE_SINT8      = FFI_TYPE_SINT8,
 	ZEND_FFI_TYPE_UINT16     = FFI_TYPE_UINT16,
@@ -175,9 +177,11 @@ static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_typ
 			case ZEND_FFI_TYPE_DOUBLE:
 				ZVAL_DOUBLE(rv, *(double*)ptr);
 				return SUCCESS;
+#ifndef PHP_WIN32
 			case ZEND_FFI_TYPE_LONGDOUBLE:
 				ZVAL_DOUBLE(rv, *(long double*)ptr);
 				return SUCCESS;
+#endif
 			case ZEND_FFI_TYPE_UINT8:
 				ZVAL_LONG(rv, *(uint8_t*)ptr);
 				return SUCCESS;
@@ -260,10 +264,12 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 			dval = zval_get_long(value);
 			*(double*)ptr = dval;
 			break;
+#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			dval = zval_get_long(value);
 			*(long double*)ptr = dval;
 			break;
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 			lval = zval_get_long(value);
 			*(uint8_t*)ptr = lval;
@@ -474,7 +480,7 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 //}
 ///* }}} */
 
-ZEND_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {{{ */
+PHP_FFI_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {{{ */
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
@@ -490,7 +496,9 @@ ZEND_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /*
 		case ZEND_FFI_TYPE_ENUM:
 		case ZEND_FFI_TYPE_FLOAT:
 		case ZEND_FFI_TYPE_DOUBLE:
+#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 		case ZEND_FFI_TYPE_SINT8:
 		case ZEND_FFI_TYPE_UINT16:
@@ -750,11 +758,13 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 			*pass_type = &ffi_type_double;
 			*(double*)pass_val = dval;
 			break;
+#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_double;
 			*(long double*)pass_val = (long double)dval;
 			break;
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_uint8;
@@ -900,8 +910,10 @@ static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
 			return &ffi_type_float;
 		case ZEND_FFI_TYPE_DOUBLE:
 			return &ffi_type_double;
+#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			return &ffi_type_double;
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 			return &ffi_type_uint8;
 		case ZEND_FFI_TYPE_SINT8:
@@ -1320,7 +1332,9 @@ const struct {
 /*  9 */	{"uint64_t", {.kind=ZEND_FFI_TYPE_UINT64, .size=8}},
 /* 10 */	{"float", {.kind=ZEND_FFI_TYPE_FLOAT, .size=4}},
 /* 11 */	{"double", {.kind=ZEND_FFI_TYPE_DOUBLE, .size=8}},
+#ifndef PHP_WIN32
 /* 12 */	{"long double", {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=10}},
+#endif
 };
 
 /* {{{ ZEND_GINIT_FUNCTION
@@ -2339,6 +2353,7 @@ void zend_ffi_expr_cast(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
 				val->kind = ZEND_FFI_VAL_ERROR;
 			}
 			break;
+#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_UINT64) {
 				val->kind = ZEND_FFI_VAL_LONG_DOUBLE;
@@ -2355,6 +2370,7 @@ void zend_ffi_expr_cast(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
 				val->kind = ZEND_FFI_VAL_ERROR;
 			}
 			break;
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 		case ZEND_FFI_TYPE_UINT16:
 		case ZEND_FFI_TYPE_UINT32:
