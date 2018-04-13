@@ -113,7 +113,7 @@ typedef struct _zend_ffi_symbol {
 
 typedef struct _zend_ffi {
 	zend_object            std;
-	DL_HANDLE             *lib;
+	DL_HANDLE              lib;
 	HashTable             *symbols;
 	HashTable             *tags;
 } zend_ffi;
