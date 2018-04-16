@@ -41,26 +41,26 @@ typedef struct _zend_ffi_tag {
 } zend_ffi_tag;
 
 typedef enum _zend_ffi_type_kind {
-	ZEND_FFI_TYPE_VOID       = FFI_TYPE_VOID,
-	ZEND_FFI_TYPE_FLOAT      = FFI_TYPE_FLOAT,
-	ZEND_FFI_TYPE_DOUBLE     = FFI_TYPE_DOUBLE,
+	ZEND_FFI_TYPE_VOID,
+	ZEND_FFI_TYPE_FLOAT,
+	ZEND_FFI_TYPE_DOUBLE,
 #ifndef PHP_WIN32
-	ZEND_FFI_TYPE_LONGDOUBLE = FFI_TYPE_LONGDOUBLE,
+	ZEND_FFI_TYPE_LONGDOUBLE,
 #endif
-	ZEND_FFI_TYPE_UINT8      = FFI_TYPE_UINT8,
-	ZEND_FFI_TYPE_SINT8      = FFI_TYPE_SINT8,
-	ZEND_FFI_TYPE_UINT16     = FFI_TYPE_UINT16,
-	ZEND_FFI_TYPE_SINT16     = FFI_TYPE_SINT16,
-	ZEND_FFI_TYPE_UINT32     = FFI_TYPE_UINT32,
-	ZEND_FFI_TYPE_SINT32     = FFI_TYPE_SINT32,
-	ZEND_FFI_TYPE_UINT64     = FFI_TYPE_UINT64,
-	ZEND_FFI_TYPE_SINT64     = FFI_TYPE_SINT64,
-	ZEND_FFI_TYPE_STRUCT     = FFI_TYPE_STRUCT,
-	ZEND_FFI_TYPE_POINTER    = FFI_TYPE_POINTER,
-	ZEND_FFI_TYPE_ARRAY      = FFI_TYPE_LAST + 1,
-	ZEND_FFI_TYPE_FUNC       = FFI_TYPE_LAST + 2,
-	ZEND_FFI_TYPE_ENUM       = FFI_TYPE_LAST + 3,
-	ZEND_FFI_TYPE_CHAR       = FFI_TYPE_LAST + 4,
+	ZEND_FFI_TYPE_UINT8,
+	ZEND_FFI_TYPE_SINT8,
+	ZEND_FFI_TYPE_UINT16,
+	ZEND_FFI_TYPE_SINT16,
+	ZEND_FFI_TYPE_UINT32,
+	ZEND_FFI_TYPE_SINT32,
+	ZEND_FFI_TYPE_UINT64,
+	ZEND_FFI_TYPE_SINT64,
+	ZEND_FFI_TYPE_ENUM,
+	ZEND_FFI_TYPE_CHAR,
+	ZEND_FFI_TYPE_POINTER,
+	ZEND_FFI_TYPE_FUNC,
+	ZEND_FFI_TYPE_ARRAY,
+	ZEND_FFI_TYPE_STRUCT,
 } zend_ffi_type_kind;
 
 struct _zend_ffi_type {
@@ -169,7 +169,7 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 
 static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv) /* {{{ */
 {
-	if (read_type == BP_VAR_R) {
+	if (read_type == BP_VAR_R && type->kind < ZEND_FFI_TYPE_ARRAY) {
 	    switch (type->kind) {
 			case ZEND_FFI_TYPE_FLOAT:
 				ZVAL_DOUBLE(rv, *(float*)ptr);
@@ -228,8 +228,6 @@ static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_typ
 					return SUCCESS;
 				}
 				break;
-			case ZEND_FFI_TYPE_STRUCT:
-			case ZEND_FFI_TYPE_ARRAY:
 			default:
 				break;
 		}
@@ -346,27 +344,37 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr = cdata->ptr;
+	void           *ptr;
 	zend_ffi_field *field;
-	zend_string    *tmp_field_name;
-	zend_string    *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
-	if (!type || type->kind != ZEND_FFI_TYPE_STRUCT) {
-		zend_throw_error(zend_ffi_exception_ce, "Attempt to read field '%s' of non C struct/union", ZSTR_VAL(field_name));
+	if (cache_slot && *cache_slot == type) {
+		field = *(cache_slot + 1);
+	} else {
+		zend_string *tmp_field_name;
+		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
+
+		if (type->kind != ZEND_FFI_TYPE_STRUCT) {
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to read field '%s' of non C struct/union", ZSTR_VAL(field_name));
+			zend_tmp_string_release(tmp_field_name);
+			return &EG(uninitialized_zval);
+		}
+
+		field = zend_hash_find_ptr(&type->record.fields, field_name);
+		if (!field) {
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to read undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
+			zend_tmp_string_release(tmp_field_name);
+			return &EG(uninitialized_zval);
+		}
+
 		zend_tmp_string_release(tmp_field_name);
-		return &EG(uninitialized_zval);
+
+		if (cache_slot) {
+			*cache_slot = type;
+			*(cache_slot + 1) = field;
+		}
 	}
 
-	field = zend_hash_find_ptr(&type->record.fields, field_name);
-	if (!field) {
-		zend_throw_error(zend_ffi_exception_ce, "Attempt to read undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
-		zend_tmp_string_release(tmp_field_name);
-		return &EG(uninitialized_zval);
-	}
-
-	zend_tmp_string_release(tmp_field_name);
-
-	ptr = (void*)(((char*)ptr) + field->offset);
+	ptr = (void*)(((char*)cdata->ptr) + field->offset);
 	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
@@ -379,25 +387,35 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr = cdata->ptr;
+	void           *ptr;
 	zend_ffi_field *field;
-	zend_string    *tmp_field_name;
-	zend_string    *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
-	if (!type || type->kind != ZEND_FFI_TYPE_STRUCT) {
-		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
+	if (cache_slot && *cache_slot == type) {
+		field = *(cache_slot + 1);
+	} else {
+		zend_string *tmp_field_name;
+		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
+
+		if (type->kind != ZEND_FFI_TYPE_STRUCT) {
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
+			zend_tmp_string_release(tmp_field_name);
+			return;
+		}
+
+		field = zend_hash_find_ptr(&type->record.fields, field_name);
+		if (!field) {
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
+			zend_tmp_string_release(tmp_field_name);
+			return;
+		}
+
 		zend_tmp_string_release(tmp_field_name);
-		return;
-	}
 
-	field = zend_hash_find_ptr(&type->record.fields, field_name);
-	if (!field) {
-		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
-		zend_tmp_string_release(tmp_field_name);
-		return;
+		if (cache_slot) {
+			*cache_slot = type;
+			*(cache_slot + 1) = field;
+		}
 	}
-
-	zend_tmp_string_release(tmp_field_name);
 
 	ptr = (void*)(((char*)cdata->ptr) + field->offset);
 	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
@@ -408,10 +426,10 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr = cdata->ptr;
 	zend_long       dim = zval_get_long(offset);
+	void           *ptr;
 
-	if (!type || type->kind != ZEND_FFI_TYPE_ARRAY) {
+	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to read element of non C array");
 		return &EG(uninitialized_zval);
 	}
@@ -421,7 +439,7 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 		return &EG(uninitialized_zval);
 	}
 
-	ptr = (void*)(((char*)ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
+	ptr = (void*)(((char*)cdata->ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
 
 	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(type->array.type), read_type, rv) != SUCCESS) {
 		return &EG(uninitialized_zval);
@@ -435,10 +453,10 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr = cdata->ptr;
 	zend_long       dim = zval_get_long(offset);
+	void           *ptr;
 
-	if (!type || type->kind != ZEND_FFI_TYPE_ARRAY) {
+	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign element of non C array");
 		return;
 	}
@@ -448,7 +466,7 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 		return;
 	}
 
-	ptr = (void*)(((char*)ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
+	ptr = (void*)(((char*)cdata->ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
 	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(type->array.type), value);
 }
 /* }}} */
