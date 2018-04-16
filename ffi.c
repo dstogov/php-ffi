@@ -1450,6 +1450,59 @@ ZEND_METHOD(FFI, free) /* {{{ */
 }
 /* }}} */
 
+ZEND_METHOD(FFI, cast) /* {{{ */
+{
+	zend_string *type_def;
+	zend_ffi_dcl dcl = {0,0,NULL};
+	zend_ffi_type *type;
+	zend_ffi_cdata *cdata;
+	void *ptr;
+	zval *zv;
+
+	ZEND_PARSE_PARAMETERS_START(2, 2)
+		Z_PARAM_STR(type_def)
+		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+	ZEND_PARSE_PARAMETERS_END();
+
+	FFI_G(error) = NULL;
+	if (Z_TYPE(EX(This)) == IS_OBJECT) {
+		zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
+		FFI_G(symbols) = ffi->symbols;
+		FFI_G(tags) = ffi->tags;
+	} else {
+		FFI_G(symbols) = NULL;
+		FFI_G(tags) = NULL;
+	}
+
+
+	if (zend_ffi_parse_type(type_def, &dcl) == SUCCESS) {
+		zend_ffi_finalize_type(&dcl);
+	}
+
+	type = ZEND_FFI_TYPE(dcl.type);
+
+	if (type == NULL || FFI_G(error)) {
+		if (FFI_G(error)) {
+			zend_throw_error(zend_ffi_parser_exception_ce, FFI_G(error));
+		} else {
+			zend_throw_error(zend_ffi_parser_exception_ce, "incorrect C type '%s'", ZSTR_VAL(type_def));
+		}
+		efree(FFI_G(error));
+		FFI_G(error) = NULL;
+		return;
+	}
+
+	// TODO: check boundary ???
+	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+	cdata->type = dcl.type;
+	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
+	cdata->user = 1;
+	cdata->owned_ptr = 0;
+
+	RETURN_OBJ(&cdata->std);
+}
+/* }}} */
+
 ZEND_METHOD(FFI, sizeof) /* {{{ */
 {
 	zval *zv;
@@ -1563,6 +1616,7 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,  ZEND_ACC_PUBLIC)
 	ZEND_ME(FFI, new, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, cast, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memcpy, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memcmp, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
