@@ -167,6 +167,34 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_is_compatible_cdata(zend_ffi_type *dst_type, zend_ffi_type *src_type) /* {{{ */
+{
+	while (1) {
+		if (dst_type == src_type) {
+			return 1;
+		}
+		if (dst_type->kind == ZEND_FFI_TYPE_POINTER &&
+		    src_type->kind == ZEND_FFI_TYPE_POINTER) {
+			dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
+			src_type = ZEND_FFI_TYPE(src_type->pointer.type);
+		} else if (dst_type->kind == ZEND_FFI_TYPE_POINTER &&
+		           src_type->kind == ZEND_FFI_TYPE_ARRAY) {
+			dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
+			src_type = ZEND_FFI_TYPE(src_type->array.type);
+		} else if (dst_type->kind == ZEND_FFI_TYPE_ARRAY &&
+		           src_type->kind == ZEND_FFI_TYPE_ARRAY &&
+		           (dst_type->array.length == src_type->array.length ||
+		            dst_type->array.length == 0)) {
+			dst_type = ZEND_FFI_TYPE(dst_type->array.type);
+			src_type = ZEND_FFI_TYPE(src_type->array.type);
+		} else {
+			break;
+		}
+	}
+	return 0;
+}
+/* }}} */
+
 static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv) /* {{{ */
 {
 	if (read_type == BP_VAR_R && type->kind < ZEND_FFI_TYPE_ARRAY) {
@@ -321,11 +349,30 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 				*(void**)ptr = NULL;
 				break;
 			}
+			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
+
+				if (!cdata->owned_ptr && zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)ptr = *(void**)cdata->ptr;
+					return SUCCESS;
+				} else if (cdata->owned_ptr && zend_ffi_is_compatible_cdata(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)ptr = cdata->ptr;
+					return SUCCESS;
+				}
+			}
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
 			return FAILURE;
 		case ZEND_FFI_TYPE_STRUCT:
 		case ZEND_FFI_TYPE_ARRAY:
 		default:
+			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
+				if (zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type)) &&
+				    type->size == ZEND_FFI_TYPE(cdata->type)->size) {
+					memcpy(ptr, cdata->ptr, type->size);
+					return SUCCESS;
+				}
+			}
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
 			return FAILURE;
 	}
@@ -429,19 +476,23 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 	zend_long       dim = zval_get_long(offset);
 	void           *ptr;
 
-	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
+	if (type->kind == ZEND_FFI_TYPE_ARRAY) {
+		if (dim < 0 || (type->array.length && dim >= type->array.length)) {
+			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
+			return &EG(uninitialized_zval);
+		}
+
+		type = ZEND_FFI_TYPE(type->array.type);
+		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
+	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
+		type = ZEND_FFI_TYPE(type->pointer.type);
+		ptr = (void*)((*(char**)cdata->ptr) + type->size * dim);
+	} else {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to read element of non C array");
 		return &EG(uninitialized_zval);
 	}
 
-	if (dim < 0 || (type->array.length && dim >= type->array.length)) {
-		zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
-		return &EG(uninitialized_zval);
-	}
-
-	ptr = (void*)(((char*)cdata->ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
-
-	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(type->array.type), read_type, rv) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, read_type, rv) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 
@@ -456,18 +507,24 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 	zend_long       dim = zval_get_long(offset);
 	void           *ptr;
 
-	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
+	if (type->kind == ZEND_FFI_TYPE_ARRAY) {
+		if (dim < 0 || (type->array.length && dim >= type->array.length)) {
+			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
+			return;
+		}
+
+		type = ZEND_FFI_TYPE(type->array.type);
+		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
+	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
+		type = ZEND_FFI_TYPE(type->pointer.type);
+		ptr = (void*)((*(char**)cdata->ptr) + type->size * dim);
+	} else {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign element of non C array");
 		return;
 	}
 
-	if (dim < 0 || (type->array.length && dim >= type->array.length)) {
-		zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
-		return;
-	}
 
-	ptr = (void*)(((char*)cdata->ptr) + ZEND_FFI_TYPE(type->array.type)->size * dim);
-	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(type->array.type), value);
+	zend_ffi_zval_to_cdata(ptr, type, value);
 }
 /* }}} */
 
@@ -528,6 +585,20 @@ PHP_FFI_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp)
 			if (zend_ffi_cdata_to_zval(cdata, ptr, type, BP_VAR_R, &tmp) == SUCCESS) {
 				ht = zend_new_array(1);
 				zend_hash_str_add(ht, "cdata", sizeof("cdata")-1, &tmp);
+				*is_temp = 1;
+				return ht;
+			}
+			break;
+		case ZEND_FFI_TYPE_POINTER:
+			if (*(void**)ptr == NULL) {
+				ZVAL_NULL(&tmp);
+				ht = zend_new_array(1);
+				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
+				*is_temp = 1;
+				return ht;
+			} else if (zend_ffi_cdata_to_zval(cdata, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp) == SUCCESS) {
+				ht = zend_new_array(1);
+				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
 				return ht;
 			}
@@ -730,34 +801,6 @@ static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **c
 }
 /* }}} */
 
-static int zend_ffi_is_compatible_cdata(zend_ffi_type *param_type, zend_ffi_type *cdata_type) /* {{{ */
-{
-	while (1) {
-		if (param_type == cdata_type) {
-			return 1;
-		}
-		if (param_type->kind == ZEND_FFI_TYPE_POINTER &&
-		    cdata_type->kind == ZEND_FFI_TYPE_POINTER) {
-		    param_type = ZEND_FFI_TYPE(param_type->pointer.type);
-		    cdata_type = ZEND_FFI_TYPE(cdata_type->pointer.type);
-		} else if (param_type->kind == ZEND_FFI_TYPE_POINTER &&
-		           cdata_type->kind == ZEND_FFI_TYPE_ARRAY) {
-		    param_type = ZEND_FFI_TYPE(param_type->pointer.type);
-		    cdata_type = ZEND_FFI_TYPE(cdata_type->array.type);
-		} else if (param_type->kind == ZEND_FFI_TYPE_ARRAY &&
-		           cdata_type->kind == ZEND_FFI_TYPE_ARRAY &&
-		           (param_type->array.length == cdata_type->array.length ||
-		            param_type->array.length == 0)) {
-		    param_type = ZEND_FFI_TYPE(param_type->array.type);
-		    cdata_type = ZEND_FFI_TYPE(cdata_type->array.type);
-		} else {
-			break;
-		}
-	}
-	return 0;
-}
-/* }}} */
-
 static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_type, void *pass_val) /* {{{ */
 {
 	zend_long lval;
@@ -835,7 +878,10 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
-				if (zend_ffi_is_compatible_cdata(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+				if (!cdata->owned_ptr && zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)pass_val = *(void**)cdata->ptr;
+					return SUCCESS;
+				} else if (cdata->owned_ptr && zend_ffi_is_compatible_cdata(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)pass_val = cdata->ptr;
 					return SUCCESS;
 				}
@@ -1795,6 +1841,7 @@ void zend_ffi_add_arg(zend_ffi_dcl *func_dcl, const char *name, size_t name_len,
 		zend_ffi_type *func_type = ZEND_FFI_TYPE(func_dcl->type);
 
 		ZEND_ASSERT(func_type && func_type->kind == ZEND_FFI_TYPE_FUNC);
+		zend_ffi_finalize_type(arg_dcl);
 		zend_hash_next_index_insert_ptr(&func_type->func.args, (void*)arg_dcl->type);
 	}
 }
