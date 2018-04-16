@@ -545,14 +545,28 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 }
 /* }}} */
 
+static int zend_ffi_cdata_compare_objects(zval *o1, zval *o2) /* {{{ */
+{
+	if (Z_TYPE_P(o1) == IS_OBJECT && Z_OBJCE_P(o1) == zend_ffi_cdata_ce &&
+	    Z_TYPE_P(o2) == IS_OBJECT && Z_OBJCE_P(o2) == zend_ffi_cdata_ce) {
+		zend_ffi_cdata *cdata1 = (zend_ffi_cdata*)Z_OBJ_P(o1);
+		zend_ffi_cdata *cdata2 = (zend_ffi_cdata*)Z_OBJ_P(o2);
+		zend_ffi_type *type1 = ZEND_FFI_TYPE(cdata1->type);
+		zend_ffi_type *type2 = ZEND_FFI_TYPE(cdata2->type);
+
+		if (type1->kind == ZEND_FFI_TYPE_POINTER && type2->kind == ZEND_FFI_TYPE_POINTER) {
+			void *ptr1 = cdata1->user ? cdata1->ptr : *(void**)cdata1->ptr;
+			void *ptr2 = cdata2->user ? cdata2->ptr : *(void**)cdata2->ptr;
+
+			return ptr1 == ptr2 ? 0 : (ptr1 < ptr2 ? -1 : 1);
+		}
+	}
+	zend_throw_error(zend_ffi_exception_ce, "Comparison of incompatible C types");
+	return 0;
+}
+/* }}} */
+
 // TODO: ???
-//static int zend_ffi_cdata_compare_objects(zval *o1, zval *o2) /* {{{ */
-//{
-//	// TODO: ???
-//	return 0;
-//}
-///* }}} */
-//
 //static int zend_ffi_cdata_cast_object(zval *readobj, zval *writeobj, int type) /* {{{ */
 //{
 //	//zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(readobj);
@@ -1410,7 +1424,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.get_properties       = NULL;
 	zend_ffi_cdata_handlers.get_method           = NULL;
 	zend_ffi_cdata_handlers.call_method          = NULL;
-	zend_ffi_cdata_handlers.compare_objects      = NULL; // TODO:??? zend_ffi_cdata_compare_objects;
+	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_handlers.cast_object          = NULL; // TODO:??? zend_ffi_cdata_cast_object;
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_handlers.get_closure          = NULL;
