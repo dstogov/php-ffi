@@ -1425,7 +1425,7 @@ ZEND_METHOD(FFI, free) /* {{{ */
 	zval *zv;
 	zend_ffi_cdata *cdata;
 
-	ZEND_PARSE_PARAMETERS_START(1, 2)
+	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce);
 	ZEND_PARSE_PARAMETERS_END();
 
@@ -1439,7 +1439,10 @@ ZEND_METHOD(FFI, free) /* {{{ */
 			cdata->ptr = NULL;
 		}
 	} else {
-		if (*(void**)cdata->ptr) {
+		zend_ffi_type *type = ZEND_FFI_TYPE(cdata->type);
+		if (type->kind != ZEND_FFI_TYPE_POINTER) {
+			zend_throw_error(zend_ffi_exception_ce, "free() non a C pointer");
+		} else if (*(void**)cdata->ptr) {
 			efree(*(void**)cdata->ptr);
 			*(void**)cdata->ptr = NULL;
 		}
@@ -1447,10 +1450,102 @@ ZEND_METHOD(FFI, free) /* {{{ */
 }
 /* }}} */
 
+ZEND_METHOD(FFI, sizeof) /* {{{ */
+{
+	zval *zv;
+	zend_ffi_cdata *cdata;
+	zend_ffi_type *type;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce);
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
+	type = ZEND_FFI_TYPE(cdata->type);
+	RETURN_LONG(type->size);
+}
+/* }}} */
+
+ZEND_METHOD(FFI, memcpy) /* {{{ */
+{
+	zval *zv1, *zv2;
+	zend_ffi_cdata *cdata1, *cdata2;
+	zend_ffi_type *type1, *type2;
+	void *ptr1, *ptr2;
+	zend_long size;
+
+	ZEND_PARSE_PARAMETERS_START(3, 3)
+		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
+		Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		Z_PARAM_LONG(size)
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
+	type1 = ZEND_FFI_TYPE(cdata1->type);
+	cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
+	type2 = ZEND_FFI_TYPE(cdata2->type);
+	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
+	ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	// TODO: check boundary ???
+	memcpy(ptr1, ptr2, size);
+}
+/* }}} */
+
+ZEND_METHOD(FFI, memcmp) /* {{{ */
+{
+	zval *zv1, *zv2;
+	zend_ffi_cdata *cdata1, *cdata2;
+	zend_ffi_type *type1, *type2;
+	void *ptr1, *ptr2;
+	zend_long size;
+
+	ZEND_PARSE_PARAMETERS_START(3, 3)
+		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
+		Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		Z_PARAM_LONG(size)
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
+	type1 = ZEND_FFI_TYPE(cdata1->type);
+	cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
+	type2 = ZEND_FFI_TYPE(cdata2->type);
+	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
+	ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	// TODO: check boundary ???
+	RETURN_LONG(memcmp(ptr1, ptr2, size));
+}
+/* }}} */
+
+ZEND_METHOD(FFI, memset) /* {{{ */
+{
+	zval *zv;
+	zend_ffi_cdata *cdata;
+	zend_ffi_type *type;
+	void *ptr;
+	zend_long ch, size;
+
+	ZEND_PARSE_PARAMETERS_START(3, 3)
+		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_LONG(ch)
+		Z_PARAM_LONG(size)
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
+	type = ZEND_FFI_TYPE(cdata->type);
+	ptr = (!cdata->user && type->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata->ptr : cdata->ptr;
+	// TODO: check boundary ???
+	memset(ptr, ch, size);
+}
+/* }}} */
+
 static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,  ZEND_ACC_PUBLIC)
 	ZEND_ME(FFI, new, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, sizeof, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memcpy, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memset, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memcmp, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
 
