@@ -344,20 +344,31 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 			lval = zval_get_long(value);
 			*(int32_t*)ptr = lval;
 			break;
-		case ZEND_FFI_TYPE_POINTER:
 		case ZEND_FFI_TYPE_FUNC:
+			if (Z_TYPE_P(value) == IS_NULL) {
+				*(void**)ptr = NULL;
+				break;
+			}
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
+			return FAILURE;
+		case ZEND_FFI_TYPE_POINTER:
 			if (Z_TYPE_P(value) == IS_NULL) {
 				*(void**)ptr = NULL;
 				break;
 			}
 			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
+				void *cdata_ptr;
 
-				if (!cdata->owned_ptr && zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)ptr = *(void**)cdata->ptr;
-					return SUCCESS;
-				} else if (cdata->owned_ptr && zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)ptr = cdata->ptr;
+				if (cdata->owned_ptr) {
+					// TODO: assignment of owned pointers is not safe, because it may be destroied by PHP (leak in tests/006.phpt) ???
+					type = ZEND_FFI_TYPE(type->pointer.type);
+					cdata_ptr = cdata->ptr;
+				} else {
+					cdata_ptr = *(void**)cdata->ptr;;
+				}
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)ptr = cdata_ptr;
 					return SUCCESS;
 				}
 			}
@@ -877,11 +888,16 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
-				if (!cdata->owned_ptr && zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)pass_val = *(void**)cdata->ptr;
-					return SUCCESS;
-				} else if (cdata->owned_ptr && zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)pass_val = cdata->ptr;
+				void *cdata_ptr;
+
+				if (cdata->owned_ptr) {
+					type = ZEND_FFI_TYPE(type->pointer.type);
+					cdata_ptr = cdata->ptr;
+				} else {
+					cdata_ptr = *(void**)cdata->ptr;;
+				}
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)pass_val = cdata_ptr;
 					return SUCCESS;
 				}
 			}
