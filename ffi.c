@@ -131,6 +131,7 @@ typedef struct _zend_ffi_cdata {
 	zend_object            std;
 	zend_ffi_type         *type;
 	void                  *ptr;
+	zend_bool              user;
 	zend_bool              owned_ptr;
 } zend_ffi_cdata;
 
@@ -159,6 +160,7 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 
 	cdata->type = NULL;
 	cdata->ptr = NULL;
+	cdata->user = 0;
 	cdata->owned_ptr = 0;
 
 	return &cdata->std;
@@ -360,8 +362,11 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
 				void *cdata_ptr;
 
-				if (cdata->owned_ptr) {
-					// TODO: assignment of owned pointers is not safe, because it may be destroied by PHP (leak in tests/006.phpt) ???
+				if (cdata->user) {
+					if (cdata->owned_ptr) {
+						zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
+						return FAILURE;
+					}
 					type = ZEND_FFI_TYPE(type->pointer.type);
 					cdata_ptr = cdata->ptr;
 				} else {
@@ -890,7 +895,7 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
 				void *cdata_ptr;
 
-				if (cdata->owned_ptr) {
+				if (cdata->user) {
 					type = ZEND_FFI_TYPE(type->pointer.type);
 					cdata_ptr = cdata->ptr;
 				} else {
@@ -1258,9 +1263,12 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	zend_ffi_type *type;
 	zend_ffi_cdata *cdata;
 	void *ptr;
+	zend_bool owned_ptr = 1;
 
-	ZEND_PARSE_PARAMETERS_START(1, 1)
+	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_STR(type_def)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_BOOL(owned_ptr)
 	ZEND_PARSE_PARAMETERS_END();
 
 	FFI_G(error) = NULL;
@@ -1297,15 +1305,44 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
 	cdata->type = dcl.type;
 	cdata->ptr = ptr;
-	cdata->owned_ptr = 1;
+	cdata->user = 1;
+	cdata->owned_ptr = owned_ptr;
 
 	RETURN_OBJ(&cdata->std);
+}
+/* }}} */
+
+ZEND_METHOD(FFI, free) /* {{{ */
+{
+	zval *zv;
+	zend_ffi_cdata *cdata;
+
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce);
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
+	if (cdata->owned_ptr) {
+		cdata->owned_ptr = 0;
+	}
+	if (cdata->user) {
+		if (cdata->ptr) {
+			efree(cdata->ptr);
+			cdata->ptr = NULL;
+		}
+	} else {
+		if (*(void**)cdata->ptr) {
+			efree(*(void**)cdata->ptr);
+			*(void**)cdata->ptr = NULL;
+		}
+	}
 }
 /* }}} */
 
 static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,  ZEND_ACC_PUBLIC)
 	ZEND_ME(FFI, new, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
 
