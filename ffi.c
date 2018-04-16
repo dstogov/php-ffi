@@ -566,27 +566,121 @@ static int zend_ffi_cdata_compare_objects(zval *o1, zval *o2) /* {{{ */
 }
 /* }}} */
 
-// TODO: ???
-//static int zend_ffi_cdata_cast_object(zval *readobj, zval *writeobj, int type) /* {{{ */
-//{
-//	//zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(readobj);
-//
-//	// TODO: ???
-//	switch (type) {
-//		case IS_LONG:
-//			break;
-//		case IS_DOUBLE:
-//			break;
-//		case IS_STRING:
-//			break;
-//		default:
-//			break;
-//	}
-//	return FAILURE;
-//}
-///* }}} */
+static int zend_ffi_cdata_count_elements(zval *object, zend_long *count) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
 
-PHP_FFI_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {{{ */
+	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to count() on non C array");
+		return FAILURE;
+	} else {
+		*count = type->array.length;
+		return SUCCESS;
+	}
+}
+/* }}} */
+
+typedef struct _zend_ffi_cdata_iterator {
+	zend_object_iterator it;
+	zend_long key;
+	zval value;
+} zend_ffi_cdata_iterator;
+
+static void zend_ffi_cdata_it_dtor(zend_object_iterator *iter) /* {{{ */
+{
+	zval_ptr_dtor(&((zend_ffi_cdata_iterator*)iter)->value);
+	zval_ptr_dtor(&iter->data);
+}
+/* }}} */
+
+static int zend_ffi_cdata_it_valid(zend_object_iterator *it) /* {{{ */
+{
+	zend_ffi_cdata_iterator *iter = (zend_ffi_cdata_iterator*)it;
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ(iter->it.data);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+
+	return (iter->key >= 0 && iter->key < type->array.length) ? SUCCESS : FAILURE;
+}
+/* }}} */
+
+static zval *zend_ffi_cdata_it_get_current_data(zend_object_iterator *it) /* {{{ */
+{
+	zend_ffi_cdata_iterator *iter = (zend_ffi_cdata_iterator*)it;
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ(iter->it.data);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+	void *ptr;
+
+	type = ZEND_FFI_TYPE(type->array.type);
+	ptr = (void*)((char*)cdata->ptr + type->size * iter->it.index);
+
+	zval_ptr_dtor(&iter->value);
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, BP_VAR_R, &iter->value) != SUCCESS) {
+		return &EG(uninitialized_zval);
+	}
+	return &iter->value;
+}
+/* }}} */
+
+static void zend_ffi_cdata_it_get_current_key(zend_object_iterator *it, zval *key) /* {{{ */
+{
+	zend_ffi_cdata_iterator *iter = (zend_ffi_cdata_iterator*)it;
+	ZVAL_LONG(key, iter->key);
+}
+/* }}} */
+
+static void zend_ffi_cdata_it_move_forward(zend_object_iterator *it) /* {{{ */
+{
+	zend_ffi_cdata_iterator *iter = (zend_ffi_cdata_iterator*)it;
+	iter->key++;
+}
+/* }}} */
+
+static void zend_ffi_cdata_it_rewind(zend_object_iterator *it) /* {{{ */
+{
+	zend_ffi_cdata_iterator *iter = (zend_ffi_cdata_iterator*)it;
+	iter->key = 0;
+}
+/* }}} */
+
+static const zend_object_iterator_funcs zend_ffi_cdata_it_funcs = {
+	zend_ffi_cdata_it_dtor,
+	zend_ffi_cdata_it_valid,
+	zend_ffi_cdata_it_get_current_data,
+	zend_ffi_cdata_it_get_current_key,
+	zend_ffi_cdata_it_move_forward,
+	zend_ffi_cdata_it_rewind,
+	NULL
+};
+
+static zend_object_iterator *zend_ffi_cdata_get_iterator(zend_class_entry *ce, zval *object, int by_ref) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+	zend_ffi_cdata_iterator *iter;
+
+	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to iterate on non C array");
+		return NULL;
+	} else if (by_ref) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to iterate on C array by reference");
+		return NULL;
+	}
+
+	iter = emalloc(sizeof(zend_ffi_cdata_iterator));
+
+	zend_iterator_init(&iter->it);
+
+	ZVAL_COPY(&iter->it.data, object);
+	iter->it.funcs = &zend_ffi_cdata_it_funcs;
+	iter->key = 0;
+	ZVAL_UNDEF(&iter->value);
+
+	return &iter->it;
+}
+/* }}} */
+
+static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {{{ */
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
@@ -1407,6 +1501,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_ce = zend_register_internal_class(&ce);
 	zend_ffi_cdata_ce->ce_flags |= ZEND_ACC_FINAL;
 	zend_ffi_cdata_ce->create_object = zend_ffi_cdata_new;
+	zend_ffi_cdata_ce->get_iterator = zend_ffi_cdata_get_iterator;
 
 	memcpy(&zend_ffi_cdata_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	zend_ffi_cdata_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
@@ -1425,7 +1520,9 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.get_method           = NULL;
 	zend_ffi_cdata_handlers.call_method          = NULL;
 	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
-	zend_ffi_cdata_handlers.cast_object          = NULL; // TODO:??? zend_ffi_cdata_cast_object;
+	zend_ffi_cdata_handlers.cast_object          = NULL;
+	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
+
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_handlers.get_closure          = NULL;
 	zend_ffi_cdata_handlers.get_gc               = NULL;
