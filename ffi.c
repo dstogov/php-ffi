@@ -44,9 +44,7 @@ typedef enum _zend_ffi_type_kind {
 	ZEND_FFI_TYPE_VOID,
 	ZEND_FFI_TYPE_FLOAT,
 	ZEND_FFI_TYPE_DOUBLE,
-#ifndef PHP_WIN32
 	ZEND_FFI_TYPE_LONGDOUBLE,
-#endif
 	ZEND_FFI_TYPE_UINT8,
 	ZEND_FFI_TYPE_SINT8,
 	ZEND_FFI_TYPE_UINT16,
@@ -167,25 +165,28 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 }
 /* }}} */
 
-static int zend_ffi_is_compatible_cdata(zend_ffi_type *dst_type, zend_ffi_type *src_type) /* {{{ */
+static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *src_type) /* {{{ */
 {
 	while (1) {
 		if (dst_type == src_type) {
 			return 1;
-		}
-		if (dst_type->kind == ZEND_FFI_TYPE_POINTER &&
-		    src_type->kind == ZEND_FFI_TYPE_POINTER) {
-			dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
-			src_type = ZEND_FFI_TYPE(src_type->pointer.type);
+		} else if (dst_type->kind == src_type->kind) {
+			if (dst_type->kind < ZEND_FFI_TYPE_POINTER) {
+				return 1;
+			} else if (dst_type->kind == ZEND_FFI_TYPE_POINTER) {
+				dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
+				src_type = ZEND_FFI_TYPE(src_type->pointer.type);
+			} else if (dst_type->kind == ZEND_FFI_TYPE_ARRAY &&
+			           (dst_type->array.length == src_type->array.length ||
+			            dst_type->array.length == 0)) {
+				dst_type = ZEND_FFI_TYPE(dst_type->array.type);
+				src_type = ZEND_FFI_TYPE(src_type->array.type);
+			} else {
+				break;
+			}
 		} else if (dst_type->kind == ZEND_FFI_TYPE_POINTER &&
 		           src_type->kind == ZEND_FFI_TYPE_ARRAY) {
 			dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
-			src_type = ZEND_FFI_TYPE(src_type->array.type);
-		} else if (dst_type->kind == ZEND_FFI_TYPE_ARRAY &&
-		           src_type->kind == ZEND_FFI_TYPE_ARRAY &&
-		           (dst_type->array.length == src_type->array.length ||
-		            dst_type->array.length == 0)) {
-			dst_type = ZEND_FFI_TYPE(dst_type->array.type);
 			src_type = ZEND_FFI_TYPE(src_type->array.type);
 		} else {
 			break;
@@ -352,10 +353,10 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
 
-				if (!cdata->owned_ptr && zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type))) {
+				if (!cdata->owned_ptr && zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)ptr = *(void**)cdata->ptr;
 					return SUCCESS;
-				} else if (cdata->owned_ptr && zend_ffi_is_compatible_cdata(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+				} else if (cdata->owned_ptr && zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)ptr = cdata->ptr;
 					return SUCCESS;
 				}
@@ -367,7 +368,7 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 		default:
 			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
-				if (zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type)) &&
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type)) &&
 				    type->size == ZEND_FFI_TYPE(cdata->type)->size) {
 					memcpy(ptr, cdata->ptr, type->size);
 					return SUCCESS;
@@ -571,9 +572,7 @@ PHP_FFI_API HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp)
 		case ZEND_FFI_TYPE_ENUM:
 		case ZEND_FFI_TYPE_FLOAT:
 		case ZEND_FFI_TYPE_DOUBLE:
-#ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
-#endif
 		case ZEND_FFI_TYPE_UINT8:
 		case ZEND_FFI_TYPE_SINT8:
 		case ZEND_FFI_TYPE_UINT16:
@@ -878,10 +877,10 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
-				if (!cdata->owned_ptr && zend_ffi_is_compatible_cdata(type, ZEND_FFI_TYPE(cdata->type))) {
+				if (!cdata->owned_ptr && zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)pass_val = *(void**)cdata->ptr;
 					return SUCCESS;
-				} else if (cdata->owned_ptr && zend_ffi_is_compatible_cdata(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+				} else if (cdata->owned_ptr && zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)pass_val = cdata->ptr;
 					return SUCCESS;
 				}
@@ -976,7 +975,7 @@ static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
 			return &ffi_type_double;
 #ifndef PHP_WIN32
 		case ZEND_FFI_TYPE_LONGDOUBLE:
-			return &ffi_type_double;
+			return &ffi_type_longdouble;
 #endif
 		case ZEND_FFI_TYPE_UINT8:
 			return &ffi_type_uint8;
@@ -1380,24 +1379,57 @@ ZEND_MINFO_FUNCTION(ffi)
 
 #define ZEND_FFI_VERSION "0.1.0"
 
+static const zend_ffi_type zend_ffi_type_void = {.kind=ZEND_FFI_TYPE_VOID, .size=0};
+static const zend_ffi_type zend_ffi_type_char = {.kind=ZEND_FFI_TYPE_CHAR, .size=1};
+static const zend_ffi_type zend_ffi_type_sint8 = {.kind=ZEND_FFI_TYPE_SINT8, .size=1};
+static const zend_ffi_type zend_ffi_type_uint8 = {.kind=ZEND_FFI_TYPE_UINT8, .size=1};
+static const zend_ffi_type zend_ffi_type_sint16 = {.kind=ZEND_FFI_TYPE_SINT16, .size=2};
+static const zend_ffi_type zend_ffi_type_uint16 = {.kind=ZEND_FFI_TYPE_UINT16, .size=2};
+static const zend_ffi_type zend_ffi_type_sint32 = {.kind=ZEND_FFI_TYPE_SINT32, .size=4};
+static const zend_ffi_type zend_ffi_type_uint32 = {.kind=ZEND_FFI_TYPE_UINT32, .size=4};
+static const zend_ffi_type zend_ffi_type_sint64 = {.kind=ZEND_FFI_TYPE_SINT64, .size=8};
+static const zend_ffi_type zend_ffi_type_uint64 = {.kind=ZEND_FFI_TYPE_UINT64, .size=8};
+static const zend_ffi_type zend_ffi_type_float = {.kind=ZEND_FFI_TYPE_FLOAT, .size=4};
+static const zend_ffi_type zend_ffi_type_double = {.kind=ZEND_FFI_TYPE_DOUBLE, .size=8};
+static const zend_ffi_type zend_ffi_type_long_double = {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=10};
+
 const struct {
 	const char *name;
-	zend_ffi_type type;
+	const zend_ffi_type *type;
 } zend_ffi_types[] = {
-/*  0 */	{"void", {.kind=ZEND_FFI_TYPE_VOID, .size=0}},
-/*  1 */	{"char", {.kind=ZEND_FFI_TYPE_CHAR, .size=1}},
-/*  2 */	{"int8_t", {.kind=ZEND_FFI_TYPE_SINT8, .size=1}},
-/*  3 */	{"uint8_t", {.kind=ZEND_FFI_TYPE_UINT8, .size=1}},
-/*  4 */	{"int16_t", {.kind=ZEND_FFI_TYPE_SINT16, .size=2}},
-/*  5 */	{"uint16_t", {.kind=ZEND_FFI_TYPE_UINT16, .size=2}},
-/*  6 */	{"int32_t", {.kind=ZEND_FFI_TYPE_SINT32, .size=4}},
-/*  7 */	{"uint32_t", {.kind=ZEND_FFI_TYPE_UINT32, .size=4}},
-/*  8 */	{"int64_t", {.kind=ZEND_FFI_TYPE_SINT64, .size=8}},
-/*  9 */	{"uint64_t", {.kind=ZEND_FFI_TYPE_UINT64, .size=8}},
-/* 10 */	{"float", {.kind=ZEND_FFI_TYPE_FLOAT, .size=4}},
-/* 11 */	{"double", {.kind=ZEND_FFI_TYPE_DOUBLE, .size=8}},
+	{"void",        &zend_ffi_type_void},
+	{"char",        &zend_ffi_type_char},
+	{"bool",        &zend_ffi_type_uint8},
+	{"int8_t",      &zend_ffi_type_sint8},
+	{"uint8_t",     &zend_ffi_type_uint8},
+	{"int16_t",     &zend_ffi_type_sint16},
+	{"uint16_t",    &zend_ffi_type_uint16},
+	{"int32_t",     &zend_ffi_type_sint32},
+	{"uint32_t",    &zend_ffi_type_uint32},
+	{"int64_t",     &zend_ffi_type_sint64},
+	{"uint64_t",    &zend_ffi_type_uint64},
+	{"float",       &zend_ffi_type_float},
+	{"double",      &zend_ffi_type_double},
 #ifndef PHP_WIN32
-/* 12 */	{"long double", {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=10}},
+	{"long double", &zend_ffi_type_long_double},
+#endif
+#if SIZEOF_SIZE_T == 4
+	{"uintptr_t",  &zend_ffi_type_uint32},
+	{"intptr_t",   &zend_ffi_type_sint32},
+	{"size_t",     &zend_ffi_type_uint32},
+	{"ssize_t",    &zend_ffi_type_sint32},
+	{"ptrdiff_t",  &zend_ffi_type_sint32},
+#else
+	{"uintptr_t",  &zend_ffi_type_uint64},
+	{"intptr_t",   &zend_ffi_type_sint64},
+	{"size_t",     &zend_ffi_type_uint64},
+	{"ssize_t",    &zend_ffi_type_sint64},
+	{"ptrdiff_t",  &zend_ffi_type_sint64},
+#endif
+#if SIZEOF_OFF_T == 4
+	{"off_t",      &zend_ffi_type_sint32},
+#else
+	{"off_t",      &zend_ffi_type_sint64},
 #endif
 };
 
@@ -1413,7 +1445,7 @@ static ZEND_GINIT_FUNCTION(ffi)
 	memset(ffi_globals, 0, sizeof(*ffi_globals));
 	zend_hash_init(&ffi_globals->types, 0, NULL, NULL, 1);
 	for (i = 0; i < sizeof(zend_ffi_types)/sizeof(zend_ffi_types[0]); i++) {
-		zend_hash_str_add_new_ptr(&ffi_globals->types, zend_ffi_types[i].name, strlen(zend_ffi_types[i].name), (void*)&zend_ffi_types[i].type);
+		zend_hash_str_add_new_ptr(&ffi_globals->types, zend_ffi_types[i].name, strlen(zend_ffi_types[i].name), (void*)zend_ffi_types[i].type);
 	}
 }
 /* }}} */
@@ -1459,74 +1491,73 @@ static void zend_ffi_finalize_type(zend_ffi_dcl *dcl)
 	if (!dcl->type) {
 		switch (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) {
 			case ZEND_FFI_DCL_VOID:
-				// TODO: find a better solution ???
-				dcl->type = Z_PTR(FFI_G(types).arData[0].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_void;
 				break;
 			case ZEND_FFI_DCL_CHAR:
-				dcl->type = Z_PTR(FFI_G(types).arData[1].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_char;
 				break;
 			case ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_SIGNED:
-				dcl->type = Z_PTR(FFI_G(types).arData[2].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_sint8;
 				break;
 			case ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_UNSIGNED:
 			case ZEND_FFI_DCL_BOOL:
-				dcl->type = Z_PTR(FFI_G(types).arData[3].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_uint8;
 				break;
 			case ZEND_FFI_DCL_SHORT:
 			case ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_SIGNED:
 			case ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_INT:
 			case ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[4].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_sint16;
 				break;
 			case ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_UNSIGNED:
 			case ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[5].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_uint16;
 				break;
 			case ZEND_FFI_DCL_INT:
 			case ZEND_FFI_DCL_SIGNED:
 			case ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[6].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_sint32;
 				break;
 			case ZEND_FFI_DCL_UNSIGNED:
 			case ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[7].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_uint32;
 				break;
 			case ZEND_FFI_DCL_LONG:
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED:
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_INT:
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_INT:
 				if (sizeof(long) == 4) {
-					dcl->type = Z_PTR(FFI_G(types).arData[6].val);
+					dcl->type = (zend_ffi_type*)&zend_ffi_type_sint32;
 				} else {
-					dcl->type = Z_PTR(FFI_G(types).arData[8].val);
+					dcl->type = (zend_ffi_type*)&zend_ffi_type_sint64;
 				}
 				break;
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_UNSIGNED:
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT:
 				if (sizeof(long) == 4) {
-					dcl->type = Z_PTR(FFI_G(types).arData[7].val);
+					dcl->type = (zend_ffi_type*)&zend_ffi_type_uint32;
 				} else {
-					dcl->type = Z_PTR(FFI_G(types).arData[9].val);
+					dcl->type = (zend_ffi_type*)&zend_ffi_type_uint64;
 				}
 				break;
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG:
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED:
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_INT:
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[8].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_sint64;
 				break;
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_UNSIGNED:
 			case ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT:
-				dcl->type = Z_PTR(FFI_G(types).arData[9].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_uint64;
 				break;
 			case ZEND_FFI_DCL_FLOAT:
-				dcl->type = Z_PTR(FFI_G(types).arData[10].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_float;
 				break;
 			case ZEND_FFI_DCL_DOUBLE:
-				dcl->type = Z_PTR(FFI_G(types).arData[11].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_double;
 				break;
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_DOUBLE:
-				dcl->type = Z_PTR(FFI_G(types).arData[12].val);
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_long_double;
 				break;
 			case ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_COMPLEX:
 			case ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_COMPLEX:
