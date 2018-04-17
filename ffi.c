@@ -1673,14 +1673,11 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_handlers.unset_property       = NULL;
 	zend_ffi_handlers.has_dimension        = NULL;
 	zend_ffi_handlers.unset_dimension      = NULL;
-	zend_ffi_handlers.get_properties       = NULL;
 	zend_ffi_handlers.get_method           = zend_ffi_get_func;
-	zend_ffi_handlers.call_method          = NULL;
 	zend_ffi_handlers.compare_objects      = NULL;
 	zend_ffi_handlers.cast_object          = NULL;
 	zend_ffi_handlers.get_debug_info       = NULL;
 	zend_ffi_handlers.get_closure          = NULL;
-	zend_ffi_handlers.get_gc               = NULL;
 
 	INIT_CLASS_ENTRY(ce, "CData", NULL);
 	zend_ffi_cdata_ce = zend_register_internal_class(&ce);
@@ -1703,16 +1700,12 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.unset_property       = NULL;
 	zend_ffi_cdata_handlers.has_dimension        = NULL;
 	zend_ffi_cdata_handlers.unset_dimension      = NULL;
-	zend_ffi_cdata_handlers.get_properties       = NULL;
 	zend_ffi_cdata_handlers.get_method           = NULL;
-	zend_ffi_cdata_handlers.call_method          = NULL;
 	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_handlers.cast_object          = NULL;
 	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
-
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_handlers.get_closure          = NULL;
-	zend_ffi_cdata_handlers.get_gc               = NULL;
 
 	return SUCCESS;
 }
