@@ -119,7 +119,6 @@ $ffi = new FFI(<<<EOF
 	static void f14(const int[5]);
 
 	/* nested */
-	typedef const char (*type68)(int, int)[10];
 	typedef int *type69[4];
 	typedef int (*type70)[4];
 	typedef int (*type71[3])(int *x, int *y);

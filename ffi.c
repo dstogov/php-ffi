@@ -2513,6 +2513,53 @@ void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t na
 }
 /* }}} */
 
+static void zend_ffi_nested_type(zend_ffi_type *type, zend_ffi_type *nested_type) /* {{{ */
+{
+	nested_type = ZEND_FFI_TYPE(nested_type);
+	switch (nested_type->kind) {
+		case ZEND_FFI_TYPE_POINTER:
+			/* "char" is used as a terminator of nested declaration */
+			if (nested_type->pointer.type == &zend_ffi_type_char) {
+				nested_type->pointer.type = type;
+			} else {
+				zend_ffi_nested_type(type, nested_type->pointer.type);
+			}
+			break;
+		case ZEND_FFI_TYPE_ARRAY:
+			/* "char" is used as a terminator of nested declaration */
+			if (nested_type->array.type == &zend_ffi_type_char) {
+				nested_type->array.type = type;
+			} else {
+				zend_ffi_nested_type(type, nested_type->array.type);
+			}
+			// TODO: recalculate size ???
+			break;
+		case ZEND_FFI_TYPE_FUNC:
+			/* "char" is used as a terminator of nested declaration */
+			if (nested_type->func.ret_type == &zend_ffi_type_char) {
+				nested_type->func.ret_type = type;
+			} else {
+				zend_ffi_nested_type(type, nested_type->func.ret_type);
+			}
+			break;
+		default:
+			ZEND_ASSERT(0);
+	}
+}
+/* }}} */
+
+void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl) /* {{{ */
+{
+	/* "char" is used as a terminator of nested declaration */
+	if (nested_dcl->type == &zend_ffi_type_char) {
+		nested_dcl->type = dcl->type;
+	} else {
+		zend_ffi_nested_type(dcl->type, nested_dcl->type);
+	}
+	dcl->type = nested_dcl->type;
+}
+/* }}} */
+
 #define zend_ffi_expr_bool(val) do { \
 	if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_UINT64) { \
 		val->kind = ZEND_FFI_VAL_INT32; \

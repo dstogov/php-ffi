@@ -315,25 +315,35 @@ enumerator(zend_ffi_dcl *enum_dcl):
 ;
 
 declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
+	/* "char" is used as a terminator of nested declaration */
+	{zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, NULL};}
+	{zend_bool nested = 0;}
 	pointer(dcl)
 	(	ID(name, name_len)
 	|	"("
-		attributes(dcl)?
-		declarator(dcl, name, name_len)
+		attributes(&nested_dcl)?
+		declarator(&nested_dcl, name, name_len)
 		")"
+		{nested = 1;}
 	)
 	array_or_function_declarators(dcl)
+	{if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);}
 ;
 
 abstract_declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
+	/* "char" is used as a terminator of nested declaration */
+	{zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, NULL};}
+	{zend_bool nested = 0;}
 	pointer(dcl)
 	(	ID(name, name_len)
 	|	"("
-		attributes(dcl)?
-		abstract_declarator(dcl, name, name_len)
+		attributes(&nested_dcl)?
+		abstract_declarator(&nested_dcl, name, name_len)
 		")"
+		{nested = 1;}
 	)?
 	array_or_function_declarators(dcl)
+	{if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);}
 ;
 
 pointer(zend_ffi_dcl *dcl):
