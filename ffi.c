@@ -24,6 +24,7 @@
 #include "php_ffi.h"
 #include "ext/standard/info.h"
 #include "zend_exceptions.h"
+#include "zend_interfaces.h"
 
 #include <ffi.h>
 
@@ -1650,6 +1651,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_ce = zend_register_internal_class(&ce);
 	zend_ffi_ce->ce_flags |= ZEND_ACC_FINAL;
 	zend_ffi_ce->create_object = zend_ffi_new;
+	zend_ffi_ce->serialize = zend_class_serialize_deny;
+	zend_ffi_ce->unserialize = zend_class_unserialize_deny;
 
 	memcpy(&zend_ffi_new_fn, zend_hash_str_find_ptr(&zend_ffi_ce->function_table, "new", sizeof("new")-1), sizeof(zend_internal_function));
 	zend_ffi_new_fn.fn_flags &= ~ZEND_ACC_STATIC;
@@ -1682,6 +1685,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_ce->ce_flags |= ZEND_ACC_FINAL;
 	zend_ffi_cdata_ce->create_object = zend_ffi_cdata_new;
 	zend_ffi_cdata_ce->get_iterator = zend_ffi_cdata_get_iterator;
+	zend_ffi_cdata_ce->serialize = zend_class_serialize_deny;
+	zend_ffi_cdata_ce->unserialize = zend_class_unserialize_deny;
 
 	memcpy(&zend_ffi_cdata_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	zend_ffi_cdata_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
