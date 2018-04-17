@@ -1331,6 +1331,11 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 			return;
 		}
 		ffi->lib = handle;
+#ifdef RTLD_DEFAULT
+	} else if (1) {
+		// TODO: this might need to be disabled or protected???
+		ffi->lib = RTLD_DEFAULT;
+#endif
 	}
 
 	if (code) {
