@@ -83,6 +83,7 @@ struct _zend_ffi_type {
 		struct {
 			zend_ffi_type *ret_type;
 			zend_bool      variadic;
+			zend_bool      no_args;
 			HashTable      args;
 			ffi_abi        abi;
 		} func;
@@ -2222,7 +2223,15 @@ void zend_ffi_add_arg(zend_ffi_dcl *func_dcl, const char *name, size_t name_len,
 
 		ZEND_ASSERT(func_type && func_type->kind == ZEND_FFI_TYPE_FUNC);
 		zend_ffi_finalize_type(arg_dcl);
-		zend_hash_next_index_insert_ptr(&func_type->func.args, (void*)arg_dcl->type);
+		if (arg_dcl->type == &zend_ffi_type_void) {
+			if (func_type->func.no_args && zend_hash_num_elements(&func_type->func.args) != 0) {
+				zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed '%.*s' at line %d", name_len, name, FFI_G(line));
+			} else {
+				func_type->func.no_args = 1;
+			}
+		} else {
+			zend_hash_next_index_insert_ptr(&func_type->func.args, (void*)arg_dcl->type);
+		}
 	}
 }
 /* }}} */
