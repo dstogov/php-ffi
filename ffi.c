@@ -1333,41 +1333,43 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 		ffi->lib = handle;
 	}
 
-	/* Parse C definitions */
-	FFI_G(error) = NULL;
-	FFI_G(symbols) = NULL;
-	FFI_G(tags) = NULL;
-
-	if (zend_ffi_parse_decl(code) != SUCCESS) {
-		zend_throw_error(zend_ffi_parser_exception_ce, FFI_G(error));
-		efree(FFI_G(error));
+	if (code) {
+		/* Parse C definitions */
 		FFI_G(error) = NULL;
-		return;
-	}
-	ffi->symbols = FFI_G(symbols);
-	ffi->tags = FFI_G(tags);
-	FFI_G(symbols) = NULL;
-	FFI_G(tags) = NULL;
+		FFI_G(symbols) = NULL;
+		FFI_G(tags) = NULL;
 
-	if (ffi->symbols) {
-		zend_string *name;
-		zend_ffi_symbol *sym;
+		if (zend_ffi_parse_decl(code) != SUCCESS) {
+			zend_throw_error(zend_ffi_parser_exception_ce, FFI_G(error));
+			efree(FFI_G(error));
+			FFI_G(error) = NULL;
+			return;
+		}
+		ffi->symbols = FFI_G(symbols);
+		ffi->tags = FFI_G(tags);
+		FFI_G(symbols) = NULL;
+		FFI_G(tags) = NULL;
 
-		ZEND_HASH_FOREACH_STR_KEY_PTR(ffi->symbols, name, sym) {
-			if (sym->kind == ZEND_FFI_SYM_VAR) {
-				addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
-				if (!addr) {
-					zend_throw_error(zend_ffi_exception_ce, "Failed resolving C variable '%s'", ZSTR_VAL(name));
+		if (ffi->symbols) {
+			zend_string *name;
+			zend_ffi_symbol *sym;
+
+			ZEND_HASH_FOREACH_STR_KEY_PTR(ffi->symbols, name, sym) {
+				if (sym->kind == ZEND_FFI_SYM_VAR) {
+					addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+					if (!addr) {
+						zend_throw_error(zend_ffi_exception_ce, "Failed resolving C variable '%s'", ZSTR_VAL(name));
+					}
+					sym->addr = addr;
+				} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
+					addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+					if (!addr) {
+						zend_throw_error(zend_ffi_exception_ce, "Failed resolving C function '%s'", ZSTR_VAL(name));
+					}
+					sym->addr = addr;
 				}
-				sym->addr = addr;
-			} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
-				addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
-				if (!addr) {
-					zend_throw_error(zend_ffi_exception_ce, "Failed resolving C function '%s'", ZSTR_VAL(name));
-				}
-				sym->addr = addr;
-			}
-		} ZEND_HASH_FOREACH_END();
+			} ZEND_HASH_FOREACH_END();
+		}
 	}
 }
 /* }}} */
