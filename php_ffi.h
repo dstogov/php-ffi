@@ -179,9 +179,8 @@ void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t n
 void zend_ffi_skip_bit_field(zend_ffi_dcl *struct_dcl, zend_ffi_val *bits);
 void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl);
 void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len);
-void zend_ffi_make_func_type(zend_ffi_dcl *dcl);
-void zend_ffi_add_arg(zend_ffi_dcl *func_dcl, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl);
-void zend_ffi_add_variadic_arg(zend_ffi_dcl *func_dcl);
+void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool variadic);
+void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl);
 void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len);
 void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t name_len, int n, zend_ffi_val *val);

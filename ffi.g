@@ -347,6 +347,8 @@ pointer(zend_ffi_dcl *dcl):
 array_or_function_declarators(zend_ffi_dcl *dcl):
 	{zend_ffi_dcl dummy = {0, 0, NULL};}
 	{zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};}
+	{HashTable *args = NULL;}
+	{zend_bool variadic = 0;}
 	(	"["
 	    (	"static"
 			type_qualifier_list(&dummy)?
@@ -362,35 +364,37 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 			|	assignment_expression(&len)
 			)
 		)
-		{zend_ffi_make_array_type(dcl, &len);}
 		"]"
+		array_or_function_declarators(dcl)
+		{zend_ffi_make_array_type(dcl, &len);}
 	|	"("
-		{zend_ffi_make_func_type(dcl);}
 		(
-			parameter_declaration(dcl)
+			parameter_declaration(&args)
 			(	","
-				parameter_declaration(dcl)
+				parameter_declaration(&args)
 			)*
 			(
 				","
 				"..."
-				{zend_ffi_add_variadic_arg(dcl);}
+				{variadic = 1;}
 			)?
 		|	"..."
 		)?
 		")"
+		array_or_function_declarators(dcl)
+		{zend_ffi_make_func_type(dcl, args, variadic);}
 //	|	"(" (ID ("," ID)*)? ")" // TODO: ANSI function not-implemented ???
-	)*
+	)?
 ;
 
-parameter_declaration(zend_ffi_dcl *func_dcl):
+parameter_declaration(HashTable **args):
 	{const char *name = NULL;}
 	{size_t name_len = 0;}
 	{zend_ffi_dcl param_dcl = {0, 0, NULL};}
 	specifier_qualifier_list(&param_dcl)
 	abstract_declarator(&param_dcl, &name, &name_len)
 	/*attributes(&param_dcl)?*/
-	{zend_ffi_add_arg(func_dcl, name, name_len, &param_dcl);}
+	{zend_ffi_add_arg(args, name, name_len, &param_dcl);}
 ;
 
 type_name(zend_ffi_dcl *dcl):

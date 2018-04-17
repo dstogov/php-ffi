@@ -83,8 +83,7 @@ struct _zend_ffi_type {
 		struct {
 			zend_ffi_type *ret_type;
 			zend_bool      variadic;
-			zend_bool      no_args;
-			HashTable      args;
+			HashTable     *args;
 			ffi_abi        abi;
 		} func;
 	};
@@ -790,7 +789,10 @@ static void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
 			zend_ffi_type_dtor(type->array.type);
 			break;
 		case ZEND_FFI_TYPE_FUNC:
-			zend_hash_destroy(&type->func.args);
+			if (type->func.args) {
+				zend_hash_destroy(type->func.args);
+				FREE_HASHTABLE(type->func.args);
+			}
 			zend_ffi_type_dtor(type->func.ret_type);
 			break;
 		default:
@@ -1165,7 +1167,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 	ALLOCA_FLAG(arg_values_use_heap)
 
 	ZEND_ASSERT(type->kind == ZEND_FFI_TYPE_FUNC);
-	arg_count = zend_hash_num_elements(&type->func.args);
+	arg_count = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
 	if (type->func.variadic) {
 		if (arg_count > EX_NUM_ARGS()) {
 			zend_throw_error(zend_ffi_exception_ce, "Incorrect number of arguments for C function '%s'", ZSTR_VAL(EX(func)->internal_function.function_name));
@@ -1177,16 +1179,18 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 			arg_values = do_alloca(
 				(sizeof(void*) + FFI_SIZEOF_ARG) * EX_NUM_ARGS(), arg_values_use_heap);
 			n = 0;
-			ZEND_HASH_FOREACH_PTR(&type->func.args, arg_type) {
-				arg_type = ZEND_FFI_TYPE(arg_type);
-				arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
-				if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
-					free_alloca(arg_types, arg_types_use_heap);
-					free_alloca(arg_values, arg_values_use_heap);
-					return;
-				}
-				n++;
-			} ZEND_HASH_FOREACH_END();
+			if (type->func.args) {
+				ZEND_HASH_FOREACH_PTR(type->func.args, arg_type) {
+					arg_type = ZEND_FFI_TYPE(arg_type);
+					arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
+					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
+						free_alloca(arg_types, arg_types_use_heap);
+						free_alloca(arg_values, arg_values_use_heap);
+						return;
+					}
+					n++;
+				} ZEND_HASH_FOREACH_END();
+			}
 			for (; n < EX_NUM_ARGS(); n++) {
 				arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
 				if (zend_ffi_pass_var_arg(EX_VAR_NUM(n), &arg_types[n], arg_values[n]) != SUCCESS) {
@@ -1219,16 +1223,18 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 			arg_values = do_alloca(
 				(sizeof(void*) + FFI_SIZEOF_ARG) * EX_NUM_ARGS(), arg_values_use_heap);
 			n = 0;
-			ZEND_HASH_FOREACH_PTR(&type->func.args, arg_type) {
-				arg_type = ZEND_FFI_TYPE(arg_type);
-				arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
-				if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
-					free_alloca(arg_types, arg_types_use_heap);
-					free_alloca(arg_values, arg_values_use_heap);
-					return;
-				}
-				n++;
-			} ZEND_HASH_FOREACH_END();
+			if (type->func.args) {
+				ZEND_HASH_FOREACH_PTR(type->func.args, arg_type) {
+					arg_type = ZEND_FFI_TYPE(arg_type);
+					arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
+					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
+						free_alloca(arg_types, arg_types_use_heap);
+						free_alloca(arg_values, arg_values_use_heap);
+						return;
+					}
+					n++;
+				} ZEND_HASH_FOREACH_END();
+			}
 		}
 		ret_type = zend_ffi_ret_type(ZEND_FFI_TYPE(type->func.ret_type));
 		if (!ret_type) {
@@ -1303,7 +1309,7 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 	func->arg_flags[2] = 0;
 	func->fn_flags = ZEND_ACC_CALL_VIA_TRAMPOLINE;
 	func->function_name = zend_string_copy(name);
-	func->num_args = func->required_num_args = zend_hash_num_elements(&type->func.args);
+	func->num_args = func->required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
 	func->handler = ZEND_FN(ffi_trampoline);
 
 	func->reserved[0] = sym;
@@ -1421,6 +1427,11 @@ ZEND_METHOD(FFI, new) /* {{{ */
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		return;
+	} else if (type->kind == ZEND_FFI_TYPE_VOID) {
+		zend_throw_error(zend_ffi_parser_exception_ce, "'void' type is not allowed");
+		efree(FFI_G(error));
+		FFI_G(error) = NULL;
+		return;
 	}
 
 	ptr = emalloc(type->size);
@@ -1503,6 +1514,11 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		} else {
 			zend_throw_error(zend_ffi_parser_exception_ce, "incorrect C type '%s'", ZSTR_VAL(type_def));
 		}
+		efree(FFI_G(error));
+		FFI_G(error) = NULL;
+		return;
+	} else if (type->kind == ZEND_FFI_TYPE_VOID) {
+		zend_throw_error(zend_ffi_parser_exception_ce, "'void' type is not allowed");
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		return;
@@ -2097,6 +2113,11 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 		ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
 		zend_ffi_finalize_type(field_dcl);
 		field_type = ZEND_FFI_TYPE(field_dcl->type);
+		if (field_type->kind == ZEND_FFI_TYPE_VOID && !FFI_G(error)) {
+			zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(field_dcl->type);
+			return;
+		}
 		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
 			field->offset = 0;
 			struct_type->size = MAX(struct_type->size, field_type->size);
@@ -2120,9 +2141,16 @@ void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t n
 {
 	if (!FFI_G(error)) {
 		zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
+		zend_ffi_type *field_type;
 
 		ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
 		zend_ffi_finalize_type(field_dcl);
+		field_type = ZEND_FFI_TYPE(field_dcl->type);
+		if (field_type->kind == ZEND_FFI_TYPE_VOID && !FFI_G(error)) {
+			zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(field_dcl->type);
+			return;
+		}
 		/* TODO: bit fields??? */
 //		zend_spprintf(&FFI_G(error), 0, "bit fields are not supported at line %d", FFI_G(line));
 	}
@@ -2157,6 +2185,10 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 {
 	int length = 0;
 	zend_ffi_type *element_type;
+	zend_ffi_type *type;
+
+	zend_ffi_finalize_type(dcl);
+	element_type = ZEND_FFI_TYPE(dcl->type);
 
 	if (len->kind == ZEND_FFI_VAL_EMPTY) {
 		length = 0;
@@ -2169,12 +2201,16 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 	} else {
 		if (!FFI_G(error)) {
 			zend_spprintf(&FFI_G(error), 0, "unsupported array index type at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			return;
 		}
 		length = 0;
 	}
 	if (length < 0) {
 		if (!FFI_G(error)) {
 			zend_spprintf(&FFI_G(error), 0, "negative array index at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			return;
 		}
 		length = 0;
 	}
@@ -2187,11 +2223,25 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 		length = 0;
 	}
 
-	zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
+	if (!FFI_G(error)) {
+		if (element_type->kind == ZEND_FFI_TYPE_VOID) {
+			zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			return;
+		} else if (element_type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "array of functions is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			return;
+		} else if (element_type->kind == ZEND_FFI_TYPE_ARRAY && element_type->array.length == 0) {
+			zend_spprintf(&FFI_G(error), 0, "only the leftmost array can be undimensioned at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			return;
+		}
+	}
+
+	type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_ARRAY;
 	type->attr = (dcl->attr & ZEND_FFI_ARRAY_ATTRS);
-	zend_ffi_finalize_type(dcl);
-	element_type = ZEND_FFI_TYPE(dcl->type);
 	// TODO: alignment ???
 	type->size = length * element_type->size;
 	type->array.type = dcl->type;
@@ -2200,49 +2250,81 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 }
 /* }}} */
 
-void zend_ffi_make_func_type(zend_ffi_dcl *dcl) /* {{{ */
+void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool variadic) /* {{{ */
 {
-	zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
+	zend_ffi_type *type;
+	zend_ffi_type *ret_type;
+
+	zend_ffi_finalize_type(dcl);
+	ret_type = ZEND_FFI_TYPE(dcl->type);
+
+	if (args && !FFI_G(error)) {
+		int no_args = 0;
+		zend_ffi_type *arg_type;
+
+		ZEND_HASH_FOREACH_PTR(args, arg_type) {
+			arg_type = ZEND_FFI_TYPE(arg_type);
+			if (arg_type->kind == ZEND_FFI_TYPE_VOID) {
+				if (zend_hash_num_elements(args) != 1) {
+					zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+					zend_ffi_type_dtor(dcl->type);
+					zend_hash_destroy(args);
+					FREE_HASHTABLE(args);
+					return;
+				} else {
+					no_args = 1;
+				}
+			}
+		} ZEND_HASH_FOREACH_END();
+		if (no_args) {
+			zend_hash_destroy(args);
+			FREE_HASHTABLE(args);
+			args = NULL;
+		}
+	}
+
+	if (!FFI_G(error)) {
+		if (ret_type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "function returning function is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			if (args) {
+				zend_hash_destroy(args);
+				FREE_HASHTABLE(args);
+			}
+			return;
+		 } else if (ret_type->kind == ZEND_FFI_TYPE_ARRAY) {
+			zend_spprintf(&FFI_G(error), 0, "function returning array is not allowed at line %d", FFI_G(line));
+			zend_ffi_type_dtor(dcl->type);
+			if (args) {
+				zend_hash_destroy(args);
+				FREE_HASHTABLE(args);
+			}
+			return;
+		}
+	}
+
+	type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_FUNC;
 	type->attr = (dcl->attr & ZEND_FFI_FUNC_ATTRS);
 	type->size = sizeof(void*);
-	zend_ffi_finalize_type(dcl);
 	type->func.ret_type = dcl->type;
-	type->func.variadic = 0;
+	type->func.variadic = variadic;
 	// TODO: verify ABI ???
 	type->func.abi = FFI_DEFAULT_ABI; //???
-	zend_hash_init(&type->func.args, 0, NULL, zend_ffi_type_hash_dtor, 0);
+	type->func.args = args;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 }
 /* }}} */
 
-void zend_ffi_add_arg(zend_ffi_dcl *func_dcl, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl) /* {{{ */
+void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl) /* {{{ */
 {
 	if (!FFI_G(error)) {
-		zend_ffi_type *func_type = ZEND_FFI_TYPE(func_dcl->type);
-
-		ZEND_ASSERT(func_type && func_type->kind == ZEND_FFI_TYPE_FUNC);
-		zend_ffi_finalize_type(arg_dcl);
-		if (arg_dcl->type == &zend_ffi_type_void) {
-			if (func_type->func.no_args && zend_hash_num_elements(&func_type->func.args) != 0) {
-				zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed '%.*s' at line %d", name_len, name, FFI_G(line));
-			} else {
-				func_type->func.no_args = 1;
-			}
-		} else {
-			zend_hash_next_index_insert_ptr(&func_type->func.args, (void*)arg_dcl->type);
+		if (!*args) {
+			ALLOC_HASHTABLE(*args);
+			zend_hash_init(*args, 0, NULL, zend_ffi_type_hash_dtor, 0);
 		}
-	}
-}
-/* }}} */
-
-void zend_ffi_add_variadic_arg(zend_ffi_dcl *func_dcl) /* {{{ */
-{
-	if (!FFI_G(error)) {
-		zend_ffi_type *func_type = ZEND_FFI_TYPE(func_dcl->type);
-
-		ZEND_ASSERT(func_type && func_type->kind == ZEND_FFI_TYPE_FUNC);
-		func_type->func.variadic = 1;
+		zend_ffi_finalize_type(arg_dcl);
+		zend_hash_next_index_insert_ptr(*args, (void*)arg_dcl->type);
 	}
 }
 /* }}} */
@@ -2274,8 +2356,13 @@ void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl) /* {
 				zend_ffi_type *type;
 
 				zend_ffi_finalize_type(dcl);
-				sym = emalloc(sizeof(zend_ffi_symbol));
 				type = ZEND_FFI_TYPE(dcl->type);
+				if (type->kind == ZEND_FFI_TYPE_VOID && !FFI_G(error)) {
+					zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+					zend_ffi_type_dtor(dcl->type);
+					return;
+				}
+				sym = emalloc(sizeof(zend_ffi_symbol));
 				sym->kind = (type->kind == ZEND_FFI_TYPE_FUNC) ? ZEND_FFI_SYM_FUNC : ZEND_FFI_SYM_VAR;
 				sym->type = dcl->type;
 				dcl->type = type; /* reset "owned" flag */
