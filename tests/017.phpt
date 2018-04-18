@@ -1,0 +1,31 @@
+--TEST--
+FFI 017: Structure constraints & tags cleanup
+--SKIPIF--
+<?php require_once('skipif.inc'); ?>
+--FILE--
+<?php
+try {
+	var_dump(FFI::new("struct X {void x();}"));
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	var_dump(FFI::new("struct X {struct X x;}"));
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	var_dump(FFI::new("struct X {struct X *ptr;}"));
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+?>
+ok
+--EXPECTF--
+FFIParserException: 'function' type is not allowed at line 1
+FFIParserException: struct/union can't contain an instance of itself at line 1
+object(CData)#%d (1) {
+  ["ptr"]=>
+  NULL
+}
+ok

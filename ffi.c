@@ -1412,10 +1412,12 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 			if (FFI_G(symbols)) {
 				zend_hash_destroy(FFI_G(symbols));
 				FREE_HASHTABLE(FFI_G(symbols));
+				FFI_G(symbols) = NULL;
 			}
 			if (FFI_G(tags)) {
 				zend_hash_destroy(FFI_G(tags));
 				FREE_HASHTABLE(FFI_G(tags));
+				FFI_G(tags) = NULL;
 			}
 			return;
 		}
@@ -1516,6 +1518,63 @@ static int zend_ffi_validate_var_type(zend_ffi_type *type) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_subst_type(zend_ffi_type **dcl, zend_ffi_type *type) /* {{{ */
+{
+	zend_ffi_type *dcl_type;
+	zend_ffi_field *field;
+
+	if (*dcl == type) {
+		*dcl = ZEND_FFI_TYPE_MAKE_OWNED(type);
+		return 1;
+	}
+	dcl_type = *dcl;
+	switch (dcl_type->kind) {
+		case ZEND_FFI_TYPE_POINTER:
+			return zend_ffi_subst_type(&dcl_type->pointer.type, type);
+		case ZEND_FFI_TYPE_ARRAY:
+			return zend_ffi_subst_type(&dcl_type->array.type, type);
+		case ZEND_FFI_TYPE_FUNC:
+			if (zend_ffi_subst_type(&dcl_type->func.ret_type, type)) {
+				return 1;
+			}
+			if (dcl_type->func.args) {
+				zval *zv;
+
+				ZEND_HASH_FOREACH_VAL(dcl_type->func.args, zv) {
+					if (zend_ffi_subst_type((zend_ffi_type**)&Z_PTR_P(zv), type)) {
+						return 1;
+					}
+				} ZEND_HASH_FOREACH_END();
+			}
+			break;
+		case ZEND_FFI_TYPE_STRUCT:
+			ZEND_HASH_FOREACH_PTR(&dcl_type->record.fields, field) {
+				if (zend_ffi_subst_type(&field->type, type)) {
+					return 1;
+				}
+			} ZEND_HASH_FOREACH_END();
+			break;
+	}
+	return 0;
+} /* }}} */
+
+static void zend_ffi_tags_cleanup(zend_ffi_dcl *dcl) /* {{{ */
+{
+	zend_ffi_tag *tag;
+	ZEND_HASH_FOREACH_PTR(FFI_G(tags), tag) {
+		if (ZEND_FFI_TYPE_IS_OWNED(tag->type)) {
+			zend_ffi_type *type = ZEND_FFI_TYPE(tag->type);
+			zend_ffi_subst_type(&dcl->type, type);
+			tag->type = type;
+		}
+	} ZEND_HASH_FOREACH_END();
+	zend_hash_destroy(FFI_G(tags));
+	FREE_HASHTABLE(FFI_G(tags));
+}
+/* }}} */
+
+
+
 ZEND_METHOD(FFI, new) /* {{{ */
 {
 	zend_string *type_def;
@@ -1541,7 +1600,6 @@ ZEND_METHOD(FFI, new) /* {{{ */
 		FFI_G(tags) = NULL;
 	}
 
-
 	if (zend_ffi_parse_type(type_def, &dcl) == SUCCESS) {
 		zend_ffi_finalize_type(&dcl);
 	}
@@ -1560,8 +1618,19 @@ ZEND_METHOD(FFI, new) /* {{{ */
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		zend_ffi_type_dtor(dcl.type);
+		if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
+			zend_hash_destroy(FFI_G(tags));
+			FREE_HASHTABLE(FFI_G(tags));
+			FFI_G(tags) = NULL;
+		}
 		return;
 	}
+
+	if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
+		zend_ffi_tags_cleanup(&dcl);
+	}
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
 
 	ptr = emalloc(type->size);
 	memset(ptr, 0, type->size);
@@ -1630,7 +1699,6 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		FFI_G(tags) = NULL;
 	}
 
-
 	if (zend_ffi_parse_type(type_def, &dcl) == SUCCESS) {
 		zend_ffi_finalize_type(&dcl);
 	}
@@ -1649,8 +1717,19 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		zend_ffi_type_dtor(dcl.type);
+		if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
+			zend_hash_destroy(FFI_G(tags));
+			FREE_HASHTABLE(FFI_G(tags));
+			FFI_G(tags) = NULL;
+		}
 		return;
 	}
+
+	if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
+		zend_ffi_tags_cleanup(&dcl);
+	}
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
 
 	// TODO: check boundary ???
 	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
