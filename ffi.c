@@ -257,7 +257,7 @@ static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_typ
 				if (*(void**)ptr == NULL) {
 					ZVAL_NULL(rv);
 					return SUCCESS;
-				} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_CHAR) {
+				} else if (type->pointer.is_const && ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_CHAR) {
 					ZVAL_STRING(rv, *(char**)ptr);
 					return SUCCESS;
 				}
@@ -1887,18 +1887,23 @@ ZEND_METHOD(FFI, string) /* {{{ */
 	zend_ffi_cdata *cdata;
 	zend_ffi_type *type;
 	void *ptr;
-	zend_long size;
+	zend_long size = 0;
 
-	ZEND_PARSE_PARAMETERS_START(2, 2)
+	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
 
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	type = ZEND_FFI_TYPE(cdata->type);
 	ptr = (!cdata->user && type->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata->ptr : cdata->ptr;
-	// TODO: check boundary ???
-	RETURN_STRINGL((char*)ptr, size);
+	if (EX_NUM_ARGS() == 2) {
+		// TODO: check boundary ???
+		RETURN_STRINGL((char*)ptr, size);
+	} else {
+		RETURN_STRING((char*)ptr);
+	}
 }
 /* }}} */
 

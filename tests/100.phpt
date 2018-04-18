@@ -12,10 +12,12 @@ try {
 --FILE--
 <?php
 $zend = new FFI("
-	char *get_zend_version(void);
+	const char *get_zend_version(void);
+	//char *get_zend_version(void);
 	extern size_t (*zend_printf)(const char *format, ...);
 ");
 var_dump(trim($zend->get_zend_version()));
+//var_dump(trim(FFI::string($zend->get_zend_version())));
 var_dump($zend->zend_printf);
 var_dump(($zend->zend_printf)("Hello %s!\n", "World"));
 ?>
