@@ -1,0 +1,64 @@
+--TEST--
+FFI 013: Declaration priorities and constrains
+--SKIPIF--
+<?php require_once('skipif.inc'); ?>
+--FILE--
+<?php
+$a = FFI::new("int[1][2][3]");
+var_dump(count($a));
+var_dump(count($a[0]));
+var_dump(count($a[0][0]));
+
+try {
+	var_dump(FFI::new("void"));
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+
+try {
+	var_dump(FFI::new("void[1]"));
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	new FFI("static int foo(int)[5];");
+	echo "ok\n";
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	new FFI("static int foo[5](int);");
+	echo "ok\n";
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	new FFI("static int foo(int)(int);");
+	echo "ok\n";
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	new FFI("typedef int foo[2][];");
+	echo "ok\n";
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+try {
+	new FFI("typedef int foo[][2];");
+	echo "ok\n";
+} catch (Throwable $e) {
+	echo get_class($e) . ": " . $e->getMessage()."\n";
+}
+?>
+--EXPECTF--
+int(1)
+int(2)
+int(3)
+FFIParserException: 'void' type is not allowed at line 1
+FFIParserException: 'void' type is not allowed at line 1
+FFIParserException: function returning array is not allowed at line 1
+FFIParserException: array of functions is not allowed at line 1
+FFIParserException: function returning function is not allowed at line 1
+FFIParserException: only the leftmost array can be undimensioned at line 1
+ok

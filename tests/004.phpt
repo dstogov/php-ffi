@@ -81,5 +81,5 @@ object(CData)#%d (2) {
   int(0)
 }
 FFIParserException: incomplete 'enum _e' at line 1
-FFIParserException: incomplete C type 'f' at line 1
+FFIParserException: incomplete 'enum _f' at line 1
 ok

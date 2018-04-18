@@ -57,5 +57,5 @@ object(CData)#%d (1) {
   int(0)
 }
 FFIParserException: incomplete 'struct _e' at line 1
-FFIParserException: incomplete C type 'f' at line 1
+FFIParserException: incomplete 'struct _f' at line 1
 ok
