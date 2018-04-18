@@ -2539,13 +2539,38 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 
 void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl) /* {{{ */
 {
+	zend_ffi_type *type;
+
 	if (!FFI_G(error)) {
 		if (!*args) {
 			ALLOC_HASHTABLE(*args);
 			zend_hash_init(*args, 0, NULL, zend_ffi_type_hash_dtor, 0);
 		}
 		zend_ffi_finalize_type(arg_dcl);
-		zend_ffi_validate_incomplete_type(ZEND_FFI_TYPE(arg_dcl->type));
+		type = ZEND_FFI_TYPE(arg_dcl->type);
+		if (type->kind == ZEND_FFI_TYPE_ARRAY) {
+			// TODO [ qualifiers ] => pointer qualifiers ???
+			if (ZEND_FFI_TYPE_IS_OWNED(arg_dcl->type)) {
+				type->kind = ZEND_FFI_TYPE_POINTER;
+				type->attr = 0; //???(dcl->attr & ZEND_FFI_POINTER_ATTRS);
+				type->size = sizeof(void*);
+			} else {
+				zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
+				new_type->kind = ZEND_FFI_TYPE_POINTER;
+				new_type->attr = 0; //???(dcl->attr & ZEND_FFI_POINTER_ATTRS);
+				new_type->size = sizeof(void*);
+				new_type->pointer.type = ZEND_FFI_TYPE(type->array.type);
+				arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
+			}
+		} else if (type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
+			new_type->kind = ZEND_FFI_TYPE_POINTER;
+			new_type->attr = 0; //???(dcl->attr & ZEND_FFI_POINTER_ATTRS);
+			new_type->size = sizeof(void*);
+			new_type->pointer.type = arg_dcl->type;
+			arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
+		}
+		zend_ffi_validate_incomplete_type(type);
 		zend_hash_next_index_insert_ptr(*args, (void*)arg_dcl->type);
 	}
 }
