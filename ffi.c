@@ -2233,6 +2233,24 @@ void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_validate_array_element_type(zend_ffi_type *type) /* {{{ */
+{
+	if (!FFI_G(error)) {
+		if (type->kind == ZEND_FFI_TYPE_VOID) {
+			zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		} else if (type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "array of functions is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		} else if (type->kind == ZEND_FFI_TYPE_ARRAY && type->array.length == 0) {
+			zend_spprintf(&FFI_G(error), 0, "only the leftmost array can be undimensioned at line %d", FFI_G(line));
+			return FAILURE;
+		}
+	}
+	return SUCCESS;
+}
+/* }}} */
+
 void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 {
 	int length = 0;
@@ -2275,20 +2293,9 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 		length = 0;
 	}
 
-	if (!FFI_G(error)) {
-		if (element_type->kind == ZEND_FFI_TYPE_VOID) {
-			zend_spprintf(&FFI_G(error), 0, "'void' type is not allowed at line %d", FFI_G(line));
-			zend_ffi_type_dtor(dcl->type);
-			return;
-		} else if (element_type->kind == ZEND_FFI_TYPE_FUNC) {
-			zend_spprintf(&FFI_G(error), 0, "array of functions is not allowed at line %d", FFI_G(line));
-			zend_ffi_type_dtor(dcl->type);
-			return;
-		} else if (element_type->kind == ZEND_FFI_TYPE_ARRAY && element_type->array.length == 0) {
-			zend_spprintf(&FFI_G(error), 0, "only the leftmost array can be undimensioned at line %d", FFI_G(line));
-			zend_ffi_type_dtor(dcl->type);
-			return;
-		}
+	if (zend_ffi_validate_array_element_type(element_type) != SUCCESS) {
+		zend_ffi_type_dtor(dcl->type);
+		return;
 	}
 
 	type = emalloc(sizeof(zend_ffi_type));
@@ -2299,6 +2306,21 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 	type->array.type = dcl->type;
 	type->array.length = length;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+}
+/* }}} */
+
+static int zend_ffi_validate_func_ret_type(zend_ffi_type *type) /* {{{ */
+{
+	if (!FFI_G(error)) {
+		if (type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "function returning function is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		 } else if (type->kind == ZEND_FFI_TYPE_ARRAY) {
+			zend_spprintf(&FFI_G(error), 0, "function returning array is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		}
+	}
+	return SUCCESS;
 }
 /* }}} */
 
@@ -2335,24 +2357,13 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 		}
 	}
 
-	if (!FFI_G(error)) {
-		if (ret_type->kind == ZEND_FFI_TYPE_FUNC) {
-			zend_spprintf(&FFI_G(error), 0, "function returning function is not allowed at line %d", FFI_G(line));
-			zend_ffi_type_dtor(dcl->type);
-			if (args) {
-				zend_hash_destroy(args);
-				FREE_HASHTABLE(args);
-			}
-			return;
-		 } else if (ret_type->kind == ZEND_FFI_TYPE_ARRAY) {
-			zend_spprintf(&FFI_G(error), 0, "function returning array is not allowed at line %d", FFI_G(line));
-			zend_ffi_type_dtor(dcl->type);
-			if (args) {
-				zend_hash_destroy(args);
-				FREE_HASHTABLE(args);
-			}
-			return;
+	if (zend_ffi_validate_func_ret_type(ret_type) != SUCCESS) {
+		zend_ffi_type_dtor(dcl->type);
+		if (args) {
+			zend_hash_destroy(args);
+			FREE_HASHTABLE(args);
 		}
+		return;
 	}
 
 	type = emalloc(sizeof(zend_ffi_type));
@@ -2580,15 +2591,18 @@ static void zend_ffi_nested_type(zend_ffi_type *type, zend_ffi_type *nested_type
 		case ZEND_FFI_TYPE_ARRAY:
 			/* "char" is used as a terminator of nested declaration */
 			if (nested_type->array.type == &zend_ffi_type_char) {
+				zend_ffi_validate_array_element_type(ZEND_FFI_TYPE(type));
 				nested_type->array.type = type;
 			} else {
 				zend_ffi_nested_type(type, nested_type->array.type);
 			}
-			// TODO: recalculate size ???
+			// TODO: alignment ???
+			nested_type->size = nested_type->array.length * ZEND_FFI_TYPE(nested_type->array.type)->size;
 			break;
 		case ZEND_FFI_TYPE_FUNC:
 			/* "char" is used as a terminator of nested declaration */
 			if (nested_type->func.ret_type == &zend_ffi_type_char) {
+				zend_ffi_validate_func_ret_type(ZEND_FFI_TYPE(type));
 				nested_type->func.ret_type = type;
 			} else {
 				zend_ffi_nested_type(type, nested_type->func.ret_type);
@@ -2603,6 +2617,7 @@ static void zend_ffi_nested_type(zend_ffi_type *type, zend_ffi_type *nested_type
 void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl) /* {{{ */
 {
 	/* "char" is used as a terminator of nested declaration */
+	zend_ffi_finalize_type(dcl);
 	if (nested_dcl->type == &zend_ffi_type_char) {
 		nested_dcl->type = dcl->type;
 	} else {
