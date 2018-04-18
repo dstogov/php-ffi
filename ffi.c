@@ -2198,21 +2198,40 @@ void zend_ffi_make_struct_type(zend_ffi_dcl *dcl) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_validate_field_type(zend_ffi_type *type, zend_ffi_type *parent) /* {{{ */
+{
+	if (!FFI_G(error)) {
+		if (type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "function field is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		} else if (type == parent) {
+			zend_spprintf(&FFI_G(error), 0, "struct/union can't contain an instance of itself at line %d", FFI_G(line));
+			return FAILURE;
+		} else {
+			// TODO: incomplete  array  type ???
+			return zend_ffi_validate_type(type);
+		}
+	}
+}
+/* }}} */
+
 void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_len, zend_ffi_dcl *field_dcl) /* {{{ */
 {
 	if (!FFI_G(error)) {
-		zend_ffi_field *field = emalloc(sizeof(zend_ffi_field));
+		zend_ffi_field *field;
 		zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
 		zend_ffi_type *field_type;
 
 		ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
 		zend_ffi_finalize_type(field_dcl);
 		field_type = ZEND_FFI_TYPE(field_dcl->type);
-		if (zend_ffi_validate_type(field_type) != SUCCESS) {
+		if (zend_ffi_validate_field_type(field_type, struct_type) != SUCCESS) {
 			zend_ffi_type_dtor(field_dcl->type);
 			field_dcl->type = NULL;
 			return;
 		}
+
+		field = emalloc(sizeof(zend_ffi_field));
 		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
 			field->offset = 0;
 			struct_type->size = MAX(struct_type->size, field_type->size);
@@ -2241,7 +2260,7 @@ void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t n
 		ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
 		zend_ffi_finalize_type(field_dcl);
 		field_type = ZEND_FFI_TYPE(field_dcl->type);
-		if (zend_ffi_validate_type(field_type) != SUCCESS) {
+		if (zend_ffi_validate_field_type(field_type, struct_type) != SUCCESS) {
 			zend_ffi_type_dtor(field_dcl->type);
 			field_dcl->type = NULL;
 			return;
