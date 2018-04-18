@@ -1649,7 +1649,7 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 			/*redeclaration of '%.*s' ??? */
 			sym = parse_ID(sym, &name, &name_len);
 			dcl->flags |= ZEND_FFI_DCL_TYPEDEF_NAME;
-			dcl->type = zend_ffi_resolve_typedef(name, name_len);
+			zend_ffi_resolve_typedef(name, name_len, dcl);
 			break;
 	}
 	return sym;
@@ -1897,11 +1897,10 @@ static int parse_abstract_declarator(int sym, zend_ffi_dcl *dcl, const char **na
 static int parse_pointer(int sym, zend_ffi_dcl *dcl) {
 	while (sym == YY__STAR) {
 		sym = get_sym();
-		zend_ffi_dcl dummy = {0, 0, NULL};
-		if (YY_IN_SET(sym, (YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\001\000\200\000\000\000\000\000")) {
-			sym = parse_type_qualifier_list(sym, &dummy);
-		}
 		zend_ffi_make_pointer_type(dcl);
+		if (YY_IN_SET(sym, (YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\001\000\200\000\000\000\000\000")) {
+			sym = parse_type_qualifier_list(sym, dcl);
+		}
 	}
 	return sym;
 }

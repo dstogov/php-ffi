@@ -214,7 +214,7 @@ type_specifier(zend_ffi_dcl *dcl):
 		{/*redeclaration of '%.*s' ??? */}
 		ID(&name, &name_len)
 		{dcl->flags |= ZEND_FFI_DCL_TYPEDEF_NAME;}
-		{dcl->type = zend_ffi_resolve_typedef(name, name_len);}
+		{zend_ffi_resolve_typedef(name, name_len, dcl);}
 	)
 ;
 
@@ -348,9 +348,8 @@ abstract_declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
 
 pointer(zend_ffi_dcl *dcl):
 	(	"*"
-		{zend_ffi_dcl dummy = {0, 0, NULL};}
-		type_qualifier_list(&dummy)?
 		{zend_ffi_make_pointer_type(dcl);}
+		type_qualifier_list(dcl)?
 	)*
 ;
 

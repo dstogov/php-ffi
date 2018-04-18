@@ -115,8 +115,6 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 #define	ZEND_FFI_ATTR_MS_STRUCT      (1<<13)
 #define	ZEND_FFI_ATTR_GCC_STRUCT     (1<<14)
 
-#define	ZEND_FFI_ATTR_CONST          (1<<15)
-
 #define ZEND_FFI_ATTR_INCOMPLETE     (1<<31)
 
 #define ZEND_FFI_STRUCT_ATTRS \
@@ -168,7 +166,7 @@ int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl);
 
 /* parser callbacks */
 int zend_ffi_is_typedef_name(const char *name, size_t name_len);
-zend_ffi_type *zend_ffi_resolve_typedef(const char *name, size_t name_len);
+void zend_ffi_resolve_typedef(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_resolve_const(const char *name, size_t name_len, zend_ffi_val *val);
 void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, zend_bool incomplete);
 void zend_ffi_make_enum_type(zend_ffi_dcl *dcl);
