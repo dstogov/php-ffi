@@ -1697,6 +1697,7 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
 	zend_long size;
+	int ret;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
 		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
@@ -1711,7 +1712,14 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
 	ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
 	// TODO: check boundary ???
-	RETURN_LONG(memcmp(ptr1, ptr2, size));
+	ret = memcmp(ptr1, ptr2, size);
+	if (ret == 0) {
+		RETVAL_LONG(0);
+	} else if (ret < 0) {
+		RETVAL_LONG(-1);
+	} else {
+		RETVAL_LONG(1);
+	}
 }
 /* }}} */
 
