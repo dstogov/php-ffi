@@ -1303,8 +1303,10 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 
 	ffi_call(&cif, addr, &ret, arg_values);
 
-	free_alloca(arg_types, arg_types_use_heap);
-	free_alloca(arg_values, arg_values_use_heap);
+	if (EX_NUM_ARGS()) {
+		free_alloca(arg_types, arg_types_use_heap);
+		free_alloca(arg_values, arg_values_use_heap);
+	}
 
 	zend_ffi_cdata_to_zval(NULL, (void*)&ret, ZEND_FFI_TYPE(type->func.ret_type), BP_VAR_R, return_value);
 
