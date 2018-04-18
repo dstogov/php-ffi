@@ -484,6 +484,8 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		}
 	}
 
+	// TODO: assignment of read-only location???
+
 	ptr = (void*)(((char*)cdata->ptr) + field->offset);
 	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
 }
@@ -543,6 +545,7 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 		return;
 	}
 
+	// TODO: assignment of read-only location???
 
 	zend_ffi_zval_to_cdata(ptr, type, value);
 }
@@ -750,9 +753,8 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 			*is_temp = 1;
 			return ht;
 		case ZEND_FFI_TYPE_FUNC:
-			ht = zend_new_array(1);
-			//???ZVAL_STRING(&tmp, "???");
-			//???zend_hash_str_add(ht, "cfunc", sizeof("cfunc")-1, &tmp);
+			ht = zend_new_array(0);
+			// TODO: function name ???
 			*is_temp = 1;
 			return ht;
 			break;
@@ -975,6 +977,8 @@ static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **c
 	}
 
 	zend_tmp_string_release(tmp_var_name);
+
+	// TODO: assignment of read-only location???
 
 	zend_ffi_zval_to_cdata(sym->addr, ZEND_FFI_TYPE(sym->type), value);
 }
@@ -1485,6 +1489,7 @@ static int zend_ffi_validate_incomplete_type(zend_ffi_type *type) /* {{{ */
 			zend_spprintf(&FFI_G(error), 0, "incomplete type at line %d", FFI_G(line));
 			return FAILURE;
 		}
+		// TODO: incomplete and variable length arrays???
 	}
 	return SUCCESS;
 }
@@ -2268,7 +2273,7 @@ void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name
 			sym->value = value;
 			enum_type->enumeration.last = value;
 			if (value > 0xffffffff) {
-				// enum/type size???
+				// TODO: enum/type size???
 				enum_type->size = 8;
 			}
 			zend_hash_str_add_new_ptr(FFI_G(symbols), name, name_len, sym);
@@ -2298,7 +2303,6 @@ static int zend_ffi_validate_field_type(zend_ffi_type *type, zend_ffi_type *pare
 			zend_spprintf(&FFI_G(error), 0, "struct/union can't contain an instance of itself at line %d", FFI_G(line));
 			return FAILURE;
 		} else {
-			// TODO: incomplete  array  type ???
 			return zend_ffi_validate_var_type(type);
 		}
 	}
@@ -2321,6 +2325,7 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 			return;
 		}
 
+		// TODO: anonymous struct/union ???
 		field = emalloc(sizeof(zend_ffi_field));
 		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
 			field->offset = 0;
@@ -2439,7 +2444,7 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 	}
 
 	if (length == 0) {
-		// TODO: array with zero size???
+		// TODO: incomplete and variable length arrays???
 //		if (!FFI_G(error)) {
 //			zend_spprintf(&FFI_G(error), 0, "unknown array size at line %d", FFI_G(line));
 //		}
@@ -2549,7 +2554,7 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 		zend_ffi_finalize_type(arg_dcl);
 		type = ZEND_FFI_TYPE(arg_dcl->type);
 		if (type->kind == ZEND_FFI_TYPE_ARRAY) {
-			// TODO [ qualifiers ] => pointer qualifiers ???
+			// TODO: [ qualifiers ] => pointer qualifiers ???
 			if (ZEND_FFI_TYPE_IS_OWNED(arg_dcl->type)) {
 				type->kind = ZEND_FFI_TYPE_POINTER;
 				type->attr = 0; //???(dcl->attr & ZEND_FFI_POINTER_ATTRS);
