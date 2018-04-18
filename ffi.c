@@ -1502,6 +1502,20 @@ static int zend_ffi_validate_type(zend_ffi_type *type) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_validate_var_type(zend_ffi_type *type) /* {{{ */
+{
+	if (!FFI_G(error)) {
+		if (type->kind == ZEND_FFI_TYPE_FUNC) {
+			zend_spprintf(&FFI_G(error), 0, "'function' type is not allowed at line %d", FFI_G(line));
+			return FAILURE;
+		} else {
+			return zend_ffi_validate_type(type);
+		}
+	}
+	return SUCCESS;
+}
+/* }}} */
+
 ZEND_METHOD(FFI, new) /* {{{ */
 {
 	zend_string *type_def;
@@ -1534,7 +1548,7 @@ ZEND_METHOD(FFI, new) /* {{{ */
 
 	type = ZEND_FFI_TYPE(dcl.type);
 	if (type) {
-		zend_ffi_validate_type(type);
+		zend_ffi_validate_var_type(type);
 	}
 
 	if (type == NULL || FFI_G(error)) {
@@ -1623,7 +1637,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 	type = ZEND_FFI_TYPE(dcl.type);
 	if (type) {
-		zend_ffi_validate_type(type);
+		zend_ffi_validate_var_type(type);
 	}
 
 	if (type == NULL || FFI_G(error)) {
