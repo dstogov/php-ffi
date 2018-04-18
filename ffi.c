@@ -91,6 +91,7 @@ struct _zend_ffi_type {
 
 typedef struct _zend_ffi_field {
 	size_t                 offset;
+	zend_bool              is_const;
 	zend_ffi_type         *type;
 } zend_ffi_field;
 
@@ -105,7 +106,10 @@ typedef struct _zend_ffi_symbol {
 	zend_ffi_symbol_kind kind;
 	zend_ffi_type *type;
 	union {
-		void *addr;
+		struct {
+			void *addr;
+			zend_bool is_const;
+		};
 		int64_t value;
 	};
 } zend_ffi_symbol;
@@ -134,6 +138,7 @@ typedef struct _zend_ffi_cdata {
 	void                  *ptr;
 	zend_bool              user;
 	zend_bool              owned_ptr;
+	zend_bool              is_const;
 } zend_ffi_cdata;
 
 static zend_class_entry *zend_ffi_exception_ce;
@@ -165,6 +170,7 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 	cdata->ptr = NULL;
 	cdata->user = 0;
 	cdata->owned_ptr = 0;
+	cdata->is_const = 0;
 
 	return &cdata->std;
 }
@@ -201,7 +207,7 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 }
 /* }}} */
 
-static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv) /* {{{ */
+static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv, zend_bool is_const) /* {{{ */
 {
 	if (read_type == BP_VAR_R && type->kind < ZEND_FFI_TYPE_ARRAY) {
 	    switch (type->kind) {
@@ -271,6 +277,7 @@ static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_typ
 		cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
 		cdata->type = type;
 		cdata->ptr = ptr;
+		cdata->is_const = is_const;
 	} else {
 		GC_ADDREF(&cdata->std);
 	}
@@ -442,7 +449,7 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 	}
 
 	ptr = (void*)(((char*)cdata->ptr) + field->offset);
-	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv, cdata->is_const) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 
@@ -484,7 +491,16 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		}
 	}
 
-	// TODO: assignment of read-only location???
+	if (cdata->is_const) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only location");
+		return;
+	} else if (field->is_const) {
+		zend_string *tmp_field_name;
+		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only field '%s'", ZSTR_VAL(field_name));
+		zend_tmp_string_release(tmp_field_name);
+		return;
+	}
 
 	ptr = (void*)(((char*)cdata->ptr) + field->offset);
 	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
@@ -514,7 +530,7 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 		return &EG(uninitialized_zval);
 	}
 
-	if (zend_ffi_cdata_to_zval(NULL, ptr, type, read_type, rv) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, read_type, rv, cdata->is_const) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 
@@ -545,7 +561,10 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 		return;
 	}
 
-	// TODO: assignment of read-only location???
+	if (cdata->is_const) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only location");
+		return;
+	}
 
 	zend_ffi_zval_to_cdata(ptr, type, value);
 }
@@ -621,7 +640,7 @@ static zval *zend_ffi_cdata_it_get_current_data(zend_object_iterator *it) /* {{{
 	ptr = (void*)((char*)cdata->ptr + type->size * iter->it.index);
 
 	zval_ptr_dtor(&iter->value);
-	if (zend_ffi_cdata_to_zval(NULL, ptr, type, BP_VAR_R, &iter->value) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, BP_VAR_R, &iter->value, cdata->is_const) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 	return &iter->value;
@@ -711,7 +730,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 		case ZEND_FFI_TYPE_SINT32:
 		case ZEND_FFI_TYPE_UINT64:
 		case ZEND_FFI_TYPE_SINT64:
-			if (zend_ffi_cdata_to_zval(cdata, ptr, type, BP_VAR_R, &tmp) == SUCCESS) {
+			if (zend_ffi_cdata_to_zval(cdata, ptr, type, BP_VAR_R, &tmp, 1) == SUCCESS) {
 				ht = zend_new_array(1);
 				zend_hash_str_add(ht, "cdata", sizeof("cdata")-1, &tmp);
 				*is_temp = 1;
@@ -725,7 +744,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
 				return ht;
-			} else if (zend_ffi_cdata_to_zval(NULL, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp) == SUCCESS) {
+			} else if (zend_ffi_cdata_to_zval(NULL, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp, 1) == SUCCESS) {
 				ht = zend_new_array(1);
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
@@ -736,7 +755,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 			ht = zend_new_array(zend_hash_num_elements(&type->record.fields));
 			ZEND_HASH_FOREACH_STR_KEY_PTR(&type->record.fields, key, f) {
 				void *f_ptr = (void*)(((char*)ptr) + f->offset);
-				if (zend_ffi_cdata_to_zval(NULL, f_ptr, ZEND_FFI_TYPE(f->type), BP_VAR_R, &tmp) == SUCCESS) {
+				if (zend_ffi_cdata_to_zval(NULL, f_ptr, ZEND_FFI_TYPE(f->type), BP_VAR_R, &tmp, 1) == SUCCESS) {
 					zend_hash_add(ht, key, &tmp);
 				}
 			} ZEND_HASH_FOREACH_END();
@@ -745,7 +764,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 		case ZEND_FFI_TYPE_ARRAY:
 			ht = zend_new_array(type->array.length);
 			for (n = 0; n < type->array.length; n++) {
-				if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(type->array.type), BP_VAR_R, &tmp) == SUCCESS) {
+				if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(type->array.type), BP_VAR_R, &tmp, 1) == SUCCESS) {
 					zend_hash_index_add(ht, n, &tmp);
 				}
 				ptr = (void*)(((char*)ptr) + ZEND_FFI_TYPE(type->array.type)->size);
@@ -949,7 +968,7 @@ static zval *zend_ffi_read_var(zval *object, zval *member, int read_type, void *
 
 	zend_tmp_string_release(tmp_var_name);
 
-	if (zend_ffi_cdata_to_zval(NULL, sym->addr, ZEND_FFI_TYPE(sym->type), read_type, rv) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, sym->addr, ZEND_FFI_TYPE(sym->type), read_type, rv, sym->is_const) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 
@@ -978,7 +997,10 @@ static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **c
 
 	zend_tmp_string_release(tmp_var_name);
 
-	// TODO: assignment of read-only location???
+	if (sym->is_const) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only C variable '%s'", ZSTR_VAL(var_name));
+		return;
+	}
 
 	zend_ffi_zval_to_cdata(sym->addr, ZEND_FFI_TYPE(sym->type), value);
 }
@@ -1312,7 +1334,8 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 		free_alloca(arg_values, arg_values_use_heap);
 	}
 
-	zend_ffi_cdata_to_zval(NULL, (void*)&ret, ZEND_FFI_TYPE(type->func.ret_type), BP_VAR_R, return_value);
+	// TODO: is_const???
+	zend_ffi_cdata_to_zval(NULL, (void*)&ret, ZEND_FFI_TYPE(type->func.ret_type), BP_VAR_R, return_value, 0);
 
 	zend_string_release(EX(func)->common.function_name);
 	zend_free_trampoline(EX(func));
@@ -1645,6 +1668,7 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	cdata->ptr = ptr;
 	cdata->user = 1;
 	cdata->owned_ptr = owned_ptr;
+	cdata->is_const = (dcl.flags & ZEND_FFI_DCL_CONST) != 0;
 
 	RETURN_OBJ(&cdata->std);
 }
@@ -1742,6 +1766,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
 	cdata->user = 1;
 	cdata->owned_ptr = 0;
+	cdata->is_const = (dcl.flags & ZEND_FFI_DCL_CONST) != 0;
 
 	RETURN_OBJ(&cdata->std);
 }
@@ -2339,6 +2364,7 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 			struct_type->size += field_type->size;
 		}
 		field->type = field_dcl->type;
+		field->is_const = (field_dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 		field_dcl->type = field_type; /* reset "owned" flag */
 
 		zend_hash_str_add_ptr(&struct_type->record.fields, name, name_len, field);
@@ -2614,6 +2640,7 @@ void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl) /* {
 					sym = emalloc(sizeof(zend_ffi_symbol));
 					sym->kind = (type->kind == ZEND_FFI_TYPE_FUNC) ? ZEND_FFI_SYM_FUNC : ZEND_FFI_SYM_VAR;
 					sym->type = dcl->type;
+					sym->is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 					dcl->type = type; /* reset "owned" flag */
 					zend_hash_str_add_new_ptr(FFI_G(symbols), name, name_len, sym);
 				} else {
