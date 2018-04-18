@@ -1672,8 +1672,8 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 		const char *name;
 		size_t name_len;
 		sym = parse_ID(sym, &name, &name_len);
+		zend_ffi_declare_tag(name, name_len, dcl, 1);
 		if (sym == YY__LBRACE) {
-			zend_ffi_declare_tag(name, name_len, dcl, 0);
 			sym = get_sym();
 			while (YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\377\077\202\000\000\000\002\000")) {
 				sym = parse_struct_declaration(sym, dcl);
@@ -1682,8 +1682,7 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 				yy_error_sym("'}' expected, got '%s'", sym);
 			}
 			sym = get_sym();
-		} else {
-			zend_ffi_declare_tag(name, name_len, dcl, 1);
+			zend_ffi_declare_tag(name, name_len, dcl, 0);
 		}
 	} else if (sym == YY__LBRACE) {
 		sym = get_sym();

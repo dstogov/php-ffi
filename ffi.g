@@ -228,13 +228,13 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 	(   {const char *name;}
 		{size_t name_len;}
 		ID(&name, &name_len)
-		(	{zend_ffi_declare_tag(name, name_len, dcl, 0);}
-			"{"
+		{zend_ffi_declare_tag(name, name_len, dcl, 1);}
+		(	"{"
 			struct_declaration(dcl)*
 			"}"
 			/*attributes(dcl)?*/
-		|	{zend_ffi_declare_tag(name, name_len, dcl, 1);}
-		)
+			{zend_ffi_declare_tag(name, name_len, dcl, 0);}
+		)?
 	|	"{"
 		{zend_ffi_make_struct_type(dcl);}
 		struct_declaration(dcl)*
