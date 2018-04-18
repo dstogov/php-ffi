@@ -25,7 +25,7 @@ try {
 ?>
 ok
 --EXPECTF--
-FFIParserException: function field is not allowed at line 1
+FFIParserException: 'function' type is not allowed at line 1
 FFIParserException: struct/union can't contain an instance of itself at line 1
 ok
 ok

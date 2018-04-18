@@ -2215,15 +2215,12 @@ void zend_ffi_make_struct_type(zend_ffi_dcl *dcl) /* {{{ */
 static int zend_ffi_validate_field_type(zend_ffi_type *type, zend_ffi_type *parent) /* {{{ */
 {
 	if (!FFI_G(error)) {
-		if (type->kind == ZEND_FFI_TYPE_FUNC) {
-			zend_spprintf(&FFI_G(error), 0, "function field is not allowed at line %d", FFI_G(line));
-			return FAILURE;
-		} else if (type == parent) {
+		if (type == parent) {
 			zend_spprintf(&FFI_G(error), 0, "struct/union can't contain an instance of itself at line %d", FFI_G(line));
 			return FAILURE;
 		} else {
 			// TODO: incomplete  array  type ???
-			return zend_ffi_validate_type(type);
+			return zend_ffi_validate_var_type(type);
 		}
 	}
 }
