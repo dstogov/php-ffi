@@ -149,6 +149,7 @@ static zend_internal_function zend_ffi_cast_fn;
 
 /* forward declarations */
 static void zend_ffi_finalize_type(zend_ffi_dcl *dcl);
+static ZEND_FUNCTION(ffi_trampoline);
 
 static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 {
@@ -721,7 +722,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
 				return ht;
-			} else if (zend_ffi_cdata_to_zval(cdata, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp) == SUCCESS) {
+			} else if (zend_ffi_cdata_to_zval(NULL, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp) == SUCCESS) {
 				ht = zend_new_array(1);
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
@@ -748,10 +749,60 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 			}
 			*is_temp = 1;
 			return ht;
+		case ZEND_FFI_TYPE_FUNC:
+			ht = zend_new_array(1);
+			//???ZVAL_STRING(&tmp, "???");
+			//???zend_hash_str_add(ht, "cfunc", sizeof("cfunc")-1, &tmp);
+			*is_temp = 1;
+			return ht;
+			break;
 		default:
+			ZEND_ASSERT(0);
 			break;
 	}
 	return NULL;
+}
+/* }}} */
+
+static int zend_ffi_cdata_get_closure(zval *obj, zend_class_entry **ce_ptr, zend_function **fptr_ptr, zend_object **obj_ptr) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(obj);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+	zend_function  *func;
+
+	if (type->kind != ZEND_FFI_TYPE_POINTER) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to call non C function pointer");
+		return FAILURE;
+	}
+	type = ZEND_FFI_TYPE(type->pointer.type);
+	if (type->kind != ZEND_FFI_TYPE_FUNC) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to call non C function pointer");
+		return FAILURE;
+	}
+
+	// TODO: setup trampoline function (arg_info) ???
+	if (EXPECTED(EG(trampoline).common.function_name == NULL)) {
+		func = &EG(trampoline);
+	} else {
+		func = ecalloc(sizeof(zend_internal_function), 1);
+	}
+	func->type = ZEND_INTERNAL_FUNCTION;
+	func->common.arg_flags[0] = 0;
+	func->common.arg_flags[1] = 0;
+	func->common.arg_flags[2] = 0;
+	func->common.fn_flags = ZEND_ACC_CALL_VIA_TRAMPOLINE;
+	func->common.function_name = ZSTR_KNOWN(ZEND_STR_MAGIC_INVOKE);
+	func->common.num_args = func->common.required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
+	func->internal_function.handler = ZEND_FN(ffi_trampoline);
+
+	func->internal_function.reserved[0] = type;
+	func->internal_function.reserved[1] = *(void**)cdata->ptr;
+
+	*ce_ptr = NULL;
+	*fptr_ptr= func;
+	*obj_ptr = NULL;
+
+	return SUCCESS;
 }
 /* }}} */
 
@@ -1154,8 +1205,8 @@ static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
 
 static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 {
-	zend_ffi_symbol *sym = EX(func)->internal_function.reserved[0];
-	zend_ffi_type *type = ZEND_FFI_TYPE(sym->type);
+	zend_ffi_type *type = EX(func)->internal_function.reserved[0];
+	void *addr = EX(func)->internal_function.reserved[1];
 	ffi_cif cif;
 	ffi_type *ret_type = NULL;
 	ffi_type **arg_types = NULL;
@@ -1250,7 +1301,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 		}
 	}
 
-	ffi_call(&cif, sym->addr, &ret, arg_values);
+	ffi_call(&cif, addr, &ret, arg_values);
 
 	free_alloca(arg_types, arg_types_use_heap);
 	free_alloca(arg_values, arg_values_use_heap);
@@ -1265,10 +1316,10 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 
 static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, const zval *key) /* {{{ */
 {
-	zend_ffi               *ffi = (zend_ffi*)*obj;
-	zend_ffi_symbol        *sym = NULL;
-	zend_internal_function *func;
-	zend_ffi_type          *type;
+	zend_ffi        *ffi = (zend_ffi*)*obj;
+	zend_ffi_symbol *sym = NULL;
+	zend_function   *func;
+	zend_ffi_type   *type;
 
 	if (ZSTR_LEN(name) == sizeof("new") -1
 	 && (ZSTR_VAL(name)[0] == 'n' || ZSTR_VAL(name)[0] == 'N')
@@ -1299,22 +1350,23 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 
 	// TODO: setup trampoline function (arg_info) ???
 	if (EXPECTED(EG(trampoline).common.function_name == NULL)) {
-		func = &EG(trampoline).internal_function;
+		func = &EG(trampoline);
 	} else {
 		func = ecalloc(sizeof(zend_internal_function), 1);
 	}
-	func->type = ZEND_INTERNAL_FUNCTION;
-	func->arg_flags[0] = 0;
-	func->arg_flags[1] = 0;
-	func->arg_flags[2] = 0;
-	func->fn_flags = ZEND_ACC_CALL_VIA_TRAMPOLINE;
-	func->function_name = zend_string_copy(name);
-	func->num_args = func->required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
-	func->handler = ZEND_FN(ffi_trampoline);
+	func->common.type = ZEND_INTERNAL_FUNCTION;
+	func->common.arg_flags[0] = 0;
+	func->common.arg_flags[1] = 0;
+	func->common.arg_flags[2] = 0;
+	func->common.fn_flags = ZEND_ACC_CALL_VIA_TRAMPOLINE;
+	func->common.function_name = zend_string_copy(name);
+	func->common.num_args = func->common.required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
+	func->internal_function.handler = ZEND_FN(ffi_trampoline);
 
-	func->reserved[0] = sym;
+	func->internal_function.reserved[0] = type;
+	func->internal_function.reserved[1] = sym->addr;
 
-	return (zend_function*)func;
+	return func;
 }
 /* }}} */
 
@@ -1727,7 +1779,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.cast_object          = NULL;
 	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
-	zend_ffi_cdata_handlers.get_closure          = NULL;
+	zend_ffi_cdata_handlers.get_closure          = zend_ffi_cdata_get_closure;
 
 	return SUCCESS;
 }
