@@ -1106,8 +1106,12 @@ again:
 				void *cdata_ptr;
 
 				if (cdata->user) {
-					type = ZEND_FFI_TYPE(type->pointer.type);
 					cdata_ptr = cdata->ptr;
+					if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+						*(void**)pass_val = cdata_ptr;
+						return SUCCESS;
+					}
+					type = ZEND_FFI_TYPE(type->pointer.type);
 				} else {
 					cdata_ptr = *(void**)cdata->ptr;;
 				}
@@ -1627,7 +1631,7 @@ static void zend_ffi_tags_cleanup(zend_ffi_dcl *dcl) /* {{{ */
 ZEND_METHOD(FFI, new) /* {{{ */
 {
 	zend_string *type_def;
-	zend_ffi_dcl dcl = {0,0,0,NULL};
+	zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
 	zend_ffi_type *type;
 	zend_ffi_cdata *cdata;
 	void *ptr;
@@ -1742,7 +1746,7 @@ ZEND_METHOD(FFI, free) /* {{{ */
 ZEND_METHOD(FFI, cast) /* {{{ */
 {
 	zend_string *type_def;
-	zend_ffi_dcl dcl = {0,0,0,NULL};
+	zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
 	zend_ffi_type *type;
 	zend_ffi_cdata *cdata;
 	zval *zv;
@@ -1859,19 +1863,28 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
 	zend_long size;
+	zend_string *str2 = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
 		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
-		Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		if (Z_TYPE_P(EX_VAR_NUM(1)) == IS_STRING) {
+			Z_PARAM_STR(str2)
+		} else {
+			Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		}
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
 
 	cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
 	type1 = ZEND_FFI_TYPE(cdata1->type);
-	cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
-	type2 = ZEND_FFI_TYPE(cdata2->type);
 	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
-	ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	if (str2) {
+		ptr2 = ZSTR_VAL(str2);
+	} else {
+		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
+		type2 = ZEND_FFI_TYPE(cdata2->type);
+		ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	}
 	// TODO: check boundary ???
 	memcpy(ptr1, ptr2, size);
 }
@@ -1885,19 +1898,37 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 	void *ptr1, *ptr2;
 	zend_long size;
 	int ret;
+	zend_string *str1 = NULL;
+	zend_string *str2 = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
-		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
-		Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
+			Z_PARAM_STR(str1)
+		} else {
+			Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
+		}
+		if (Z_TYPE_P(EX_VAR_NUM(1)) == IS_STRING) {
+			Z_PARAM_STR(str2)
+		} else {
+			Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
+		}
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
 
-	cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
-	type1 = ZEND_FFI_TYPE(cdata1->type);
-	cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
-	type2 = ZEND_FFI_TYPE(cdata2->type);
-	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
-	ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	if (str1) {
+		ptr1 = ZSTR_VAL(str1);
+	} else {
+		cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
+		type1 = ZEND_FFI_TYPE(cdata1->type);
+		ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
+	}
+	if (str2) {
+		ptr2 = ZSTR_VAL(str2);
+	} else {
+		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
+		type2 = ZEND_FFI_TYPE(cdata2->type);
+		ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+	}
 	// TODO: check boundary ???
 	ret = memcmp(ptr1, ptr2, size);
 	if (ret == 0) {
@@ -2761,11 +2792,50 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 	type->func.ret_type = dcl->type;
 	type->func.variadic = variadic;
 	// TODO: verify ABI ???
-	type->func.abi = FFI_DEFAULT_ABI; //???
+	switch (dcl->abi) {
+		case ZEND_FFI_ABI_DEFAULT:
+		case ZEND_FFI_ABI_CDECL:
+			type->func.abi = FFI_DEFAULT_ABI;
+			break;
+		case ZEND_FFI_ABI_FASTCALL:
+			type->func.abi = FFI_FASTCALL;
+			break;
+		case ZEND_FFI_ABI_THISCALL:
+			type->func.abi = FFI_THISCALL;
+			break;
+		case ZEND_FFI_ABI_STDCALL:
+			type->func.abi = FFI_STDCALL;
+			break;
+#if 0
+		case ZEND_FFI_ABI_PASCAL:
+			type->func.abi = FFI_PASCAL;
+			break;
+#endif
+#if 0
+		case ZEND_FFI_ABI_REGISTER:
+			type->func.abi = FFI_REGISTER;
+			break;
+#endif
+#ifdef X86_WIN32
+		case ZEND_FFI_ABI_MS:
+			type->func.abi = FFI_MS_CDECL;
+			break;
+#endif
+		case ZEND_FFI_ABI_SYSV:
+			type->func.abi = FFI_SYSV;
+			break;
+		default:
+			type->func.abi = FFI_DEFAULT_ABI;
+			if (!FFI_G(error)) {
+				zend_spprintf(&FFI_G(error), 0, "unsupported calling convention line %d", FFI_G(line));
+			}
+			break;
+	}
 	type->func.args = args;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	dcl->attr &= ~ZEND_FFI_FUNC_ATTRS;
 	dcl->align = 0;
+	dcl->abi = 0;
 }
 /* }}} */
 
@@ -2930,20 +3000,32 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 }
 /* }}} */
 
+void zend_ffi_set_abi(zend_ffi_dcl *dcl, uint16_t abi) /* {{{ */
+{
+	if (dcl->abi != ZEND_FFI_ABI_DEFAULT) {
+		if (!FFI_G(error)) {
+			zend_spprintf(&FFI_G(error), 0, "multiple calling convention specifiers at line %d", FFI_G(line));
+		}
+	} else {
+		dcl->abi = abi;
+	}
+}
+/* }}} */
+
 void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len) /* {{{ */
 {
 	if (name_len == sizeof("cdecl")-1 && memcmp(name, "cdecl", sizeof("cdecl")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_CDECL;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_CDECL);
 	} else if (name_len == sizeof("fastcall")-1 && memcmp(name, "fastcall", sizeof("fastcall")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_FASTCALL;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_FASTCALL);
 	} else if (name_len == sizeof("thiscall")-1 && memcmp(name, "thiscall", sizeof("thiscall")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_THISCALL;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_THISCALL);
 	} else if (name_len == sizeof("stdcall")-1 && memcmp(name, "stdcall", sizeof("stdcall")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_STDCALL;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_STDCALL);
 	} else if (name_len == sizeof("ms_abi")-1 && memcmp(name, "ms_abi", sizeof("ms_abi")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_MS_ABI;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_MS);
 	} else if (name_len == sizeof("sysv_abi")-1 && memcmp(name, "sysv_abi", sizeof("sysv_abi")-1) == 0) {
-		dcl->attr |= ZEND_FFI_ATTR_SYSV_ABI;
+		zend_ffi_set_abi(dcl, ZEND_FFI_ABI_SYSV);
 	} else if (name_len == sizeof("aligned")-1 && memcmp(name, "aligned", sizeof("aligned")-1) == 0) {
 		dcl->align = __BIGGEST_ALIGNMENT__;
 	} else if (name_len == sizeof("packed")-1 && memcmp(name, "packed", sizeof("packed")-1) == 0) {
@@ -2969,14 +3051,8 @@ void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len
 void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t name_len, int n, zend_ffi_val *val) /* {{{ */
 {
 	if (n == 0 && name_len == sizeof("regparam")-1 && memcmp(name, "regparam", sizeof("regparam")-1) == 0) {
-		if ((val->kind == ZEND_FFI_VAL_INT32 || val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_INT64 || val->kind == ZEND_FFI_VAL_UINT64) && val->i64 > 0 && val->i64 <= 3) {
-			if (val->i64 == 1) {
-				dcl->attr |= ZEND_FFI_ATTR_REGPARAM_1;
-			} else if (val->i64 == 2) {
-				dcl->attr |= ZEND_FFI_ATTR_REGPARAM_2;
-			} else {
-				dcl->attr |= ZEND_FFI_ATTR_REGPARAM_3;
-			}
+		if ((val->kind == ZEND_FFI_VAL_INT32 || val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_INT64 || val->kind == ZEND_FFI_VAL_UINT64) && val->i64 == 3) {
+			zend_ffi_set_abi(dcl, ZEND_FFI_ABI_REGISTER);
 		} else {
 			if (!FFI_G(error)) {
 				zend_spprintf(&FFI_G(error), 0, "incorrect 'regparam' value at line %d", FFI_G(line));

@@ -95,27 +95,23 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 #define ZEND_FFI_DCL_INLINE          (1<<25)
 #define ZEND_FFI_DCL_NO_RETURN       (1<<26)
 
-#define ZEND_FFI_ATTR_CDECL          (1<<0)
-#define ZEND_FFI_ATTR_FASTCALL       (1<<1)
-#define ZEND_FFI_ATTR_THISCALL       (1<<4)
-#define ZEND_FFI_ATTR_STDCALL        (1<<5)
-#define	ZEND_FFI_ATTR_REGPARAM_1     (1<<6)
-#define	ZEND_FFI_ATTR_REGPARAM_2     (1<<7)
-#define	ZEND_FFI_ATTR_REGPARAM_3     (1<<8)
-#define	ZEND_FFI_ATTR_MS_ABI         (1<<9)
-#define	ZEND_FFI_ATTR_SYSV_ABI       (1<<10)
+#define ZEND_FFI_ABI_DEFAULT        0
 
-#define ZEND_FFI_FUNC_ATTRS \
-	(ZEND_FFI_ATTR_CDECL|ZEND_FFI_ATTR_FASTCALL|ZEND_FFI_ATTR_THISCALL \
-	|ZEND_FFI_ATTR_STDCALL|ZEND_FFI_ATTR_REGPARAM_1|ZEND_FFI_ATTR_REGPARAM_2 \
-	|ZEND_FFI_ATTR_REGPARAM_3|ZEND_FFI_ATTR_MS_ABI|ZEND_FFI_ATTR_SYSV_ABI)
+#define ZEND_FFI_ABI_CDECL          1  // FFI_DEFAULT_ABI
+#define ZEND_FFI_ABI_FASTCALL       2  // FFI_FASTCALL
+#define ZEND_FFI_ABI_THISCALL       3  // FFI_THISCALL
+#define ZEND_FFI_ABI_STDCALL        4  // FFI_STDCALL
+#define	ZEND_FFI_ABI_PASCAL         5  // FFI_PASCAL
+#define	ZEND_FFI_ABI_REGISTER       6  // FFI_REGISTER
+#define	ZEND_FFI_ABI_MS             7  // FFI_MS_CDECL
+#define	ZEND_FFI_ABI_SYSV           8  // FFI_SYSV
 
-#define	ZEND_FFI_ATTR_UNION          (1<<11)
-#define	ZEND_FFI_ATTR_PACKED         (1<<12)
-#define	ZEND_FFI_ATTR_MS_STRUCT      (1<<13)
-#define	ZEND_FFI_ATTR_GCC_STRUCT     (1<<14)
+#define	ZEND_FFI_ATTR_UNION          (1<<0)
+#define	ZEND_FFI_ATTR_PACKED         (1<<1)
+#define	ZEND_FFI_ATTR_MS_STRUCT      (1<<2)
+#define	ZEND_FFI_ATTR_GCC_STRUCT     (1<<3)
 
-#define ZEND_FFI_ATTR_INCOMPLETE     (1<<31)
+#define ZEND_FFI_ATTR_INCOMPLETE     (1<<7)
 
 #define ZEND_FFI_STRUCT_ATTRS \
 	(ZEND_FFI_ATTR_UNION|ZEND_FFI_ATTR_PACKED|ZEND_FFI_ATTR_MS_STRUCT \
@@ -126,11 +122,13 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 
 #define ZEND_FFI_ARRAY_ATTRS         0
 #define ZEND_FFI_POINTER_ATTRS       0
+#define ZEND_FFI_FUNC_ATTRS          0
 
 typedef struct _zend_ffi_dcl {
 	uint32_t       flags;
 	uint32_t       align;
 	uint16_t       attr;
+	uint16_t       abi;
 	zend_ffi_type *type;
 } zend_ffi_dcl;
 
@@ -184,6 +182,7 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len);
 void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t name_len, int n, zend_ffi_val *val);
+void zend_ffi_set_abi(zend_ffi_dcl *dcl, uint16_t abi);
 void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl);
 
 void zend_ffi_expr_conditional(zend_ffi_val *val, zend_ffi_val *op2, zend_ffi_val *op3);
