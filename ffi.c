@@ -68,7 +68,7 @@ struct _zend_ffi_type {
 	size_t                 size;
 	union {
 		struct {
-			int64_t last;
+			zend_ffi_type_kind kind;
 		} enumeration;
 		struct {
 			zend_ffi_type *type;
@@ -210,7 +210,10 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv, zend_bool is_const) /* {{{ */
 {
 	if (read_type == BP_VAR_R && type->kind < ZEND_FFI_TYPE_ARRAY) {
-	    switch (type->kind) {
+		zend_ffi_type_kind kind = type->kind;
+
+again:
+	    switch (kind) {
 			case ZEND_FFI_TYPE_FLOAT:
 				ZVAL_DOUBLE(rv, *(float*)ptr);
 				return SUCCESS;
@@ -250,9 +253,8 @@ static int zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_typ
 				ZVAL_INTERNED_STR(rv, ZSTR_CHAR(*(unsigned char*)ptr));
 				return SUCCESS;
 			case ZEND_FFI_TYPE_ENUM:
-				// TODO: enum type/size???
-				ZVAL_LONG(rv, *(uint32_t*)ptr);
-				return SUCCESS;
+				kind = type->enumeration.kind;
+				goto again;
 			case ZEND_FFI_TYPE_POINTER:
 				if (*(void**)ptr == NULL) {
 					ZVAL_NULL(rv);
@@ -293,8 +295,10 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 	double dval;
 	zend_string *tmp_str;
 	zend_string *str;
+	zend_ffi_type_kind kind = type->kind;
 
-    switch (type->kind) {
+again:
+    switch (kind) {
 		case ZEND_FFI_TYPE_FLOAT:
 			dval = zval_get_long(value);
 			*(float*)ptr = dval;
@@ -352,10 +356,8 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 			zend_tmp_string_release(tmp_str);
 			break;
 		case ZEND_FFI_TYPE_ENUM:
-			// TODO: enum type/size???
-			lval = zval_get_long(value);
-			*(int32_t*)ptr = lval;
-			break;
+			kind = type->enumeration.kind;
+			goto again;
 		case ZEND_FFI_TYPE_FUNC:
 			if (Z_TYPE_P(value) == IS_NULL) {
 				*(void**)ptr = NULL;
@@ -1025,9 +1027,12 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 	zend_long lval;
 	double dval;
 	zend_string *str, *tmp_str;
+	zend_ffi_type_kind kind = type->kind;
 
 	ZVAL_DEREF(arg);
-	switch (type->kind) {
+
+again:
+    switch (kind) {
 		case ZEND_FFI_TYPE_FLOAT:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_float;
@@ -1131,11 +1136,8 @@ static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_typ
 			zend_tmp_string_release(tmp_str);
 			break;
 		case ZEND_FFI_TYPE_ENUM:
-			lval = zval_get_long(arg);
-			// TODO: enum type/size?
-			*pass_type = &ffi_type_sint32;
-			*(int32_t*)pass_val = (int32_t)lval;
-			break;
+			kind = type->enumeration.kind;
+			goto again;
 		case ZEND_FFI_TYPE_STRUCT:
 			zend_throw_error(zend_ffi_exception_ce, "FFI passing struct/union is not implemented");
 			return FAILURE;
@@ -1193,7 +1195,10 @@ static int zend_ffi_pass_var_arg(zval *arg, ffi_type **pass_type, void **pass_va
 
 static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
 {
-	switch (type->kind) {
+	zend_ffi_type_kind kind = type->kind;
+
+again:
+    switch (kind) {
 		case ZEND_FFI_TYPE_FLOAT:
 			return &ffi_type_float;
 		case ZEND_FFI_TYPE_DOUBLE:
@@ -1227,8 +1232,8 @@ static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
 		case ZEND_FFI_TYPE_CHAR:
 			return &ffi_type_sint8;
 		case ZEND_FFI_TYPE_ENUM:
-			// TODO: enum type/size?
-			return &ffi_type_sint32;
+			kind = type->enumeration.kind;
+			goto again;
 		case ZEND_FFI_TYPE_STRUCT:
 			zend_throw_error(zend_ffi_exception_ce, "FFI return struct/union is not implemented");
 			break;
@@ -1659,16 +1664,30 @@ ZEND_METHOD(FFI, new) /* {{{ */
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		zend_ffi_type_dtor(dcl.type);
-		if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
-			zend_hash_destroy(FFI_G(tags));
-			FREE_HASHTABLE(FFI_G(tags));
-			FFI_G(tags) = NULL;
+		if (Z_TYPE(EX(This)) != IS_OBJECT) {
+			if (FFI_G(tags)) {
+				zend_hash_destroy(FFI_G(tags));
+				FREE_HASHTABLE(FFI_G(tags));
+				FFI_G(tags) = NULL;
+			}
+			if (FFI_G(symbols)) {
+				zend_hash_destroy(FFI_G(symbols));
+				FREE_HASHTABLE(FFI_G(symbols));
+				FFI_G(symbols) = NULL;
+			}
 		}
 		return;
 	}
 
-	if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
-		zend_ffi_tags_cleanup(&dcl);
+	if (Z_TYPE(EX(This)) != IS_OBJECT) {
+		if (FFI_G(tags)) {
+			zend_ffi_tags_cleanup(&dcl);
+		}
+		if (FFI_G(symbols)) {
+			zend_hash_destroy(FFI_G(symbols));
+			FREE_HASHTABLE(FFI_G(symbols));
+			FFI_G(symbols) = NULL;
+		}
 	}
 	FFI_G(symbols) = NULL;
 	FFI_G(tags) = NULL;
@@ -1759,16 +1778,30 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		efree(FFI_G(error));
 		FFI_G(error) = NULL;
 		zend_ffi_type_dtor(dcl.type);
-		if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
-			zend_hash_destroy(FFI_G(tags));
-			FREE_HASHTABLE(FFI_G(tags));
-			FFI_G(tags) = NULL;
+		if (Z_TYPE(EX(This)) != IS_OBJECT) {
+			if (FFI_G(tags)) {
+				zend_hash_destroy(FFI_G(tags));
+				FREE_HASHTABLE(FFI_G(tags));
+				FFI_G(tags) = NULL;
+			}
+			if (FFI_G(symbols)) {
+				zend_hash_destroy(FFI_G(symbols));
+				FREE_HASHTABLE(FFI_G(symbols));
+				FFI_G(symbols) = NULL;
+			}
 		}
 		return;
 	}
 
-	if (Z_TYPE(EX(This)) != IS_OBJECT && FFI_G(tags)) {
-		zend_ffi_tags_cleanup(&dcl);
+	if (Z_TYPE(EX(This)) != IS_OBJECT) {
+		if (FFI_G(tags)) {
+			zend_ffi_tags_cleanup(&dcl);
+		}
+		if (FFI_G(symbols)) {
+			zend_hash_destroy(FFI_G(symbols));
+			FREE_HASHTABLE(FFI_G(symbols));
+			FFI_G(symbols) = NULL;
+		}
 	}
 	FFI_G(symbols) = NULL;
 	FFI_G(tags) = NULL;
@@ -2262,9 +2295,27 @@ void zend_ffi_resolve_const(const char *name, size_t name_len, zend_ffi_val *val
 		if (FFI_G(symbols)) {
 			sym = zend_hash_str_find_ptr(FFI_G(symbols), name, name_len);
 			if (sym && sym->kind == ZEND_FFI_SYM_CONST) {
-				// TODO: enum type/size???
-				val->kind = ZEND_FFI_VAL_INT32;
 				val->i64 = sym->value;
+				switch (sym->type->kind) {
+					case ZEND_FFI_TYPE_SINT8:
+					case ZEND_FFI_TYPE_SINT16:
+					case ZEND_FFI_TYPE_SINT32:
+						val->kind = ZEND_FFI_VAL_INT32;
+						break;
+					case ZEND_FFI_TYPE_SINT64:
+						val->kind = ZEND_FFI_VAL_INT64;
+						break;
+					case ZEND_FFI_TYPE_UINT8:
+					case ZEND_FFI_TYPE_UINT16:
+					case ZEND_FFI_TYPE_UINT32:
+						val->kind = ZEND_FFI_VAL_UINT32;
+						break;
+					case ZEND_FFI_TYPE_UINT64:
+						val->kind = ZEND_FFI_VAL_UINT64;
+						break;
+					default:
+						ZEND_ASSERT(0);
+				}
 				return;
 			}
 		}
@@ -2278,32 +2329,118 @@ void zend_ffi_make_enum_type(zend_ffi_dcl *dcl) /* {{{ */
 	zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_ENUM;
 	type->attr = (dcl->attr & ZEND_FFI_ENUM_ATTRS);
-	type->size = sizeof(int);
-	type->enumeration.last = -1;
+	type->size = 0;
+	type->enumeration.kind = ZEND_FFI_TYPE_VOID;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 }
 /* }}} */
 
-void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name_len, zend_ffi_val *val) /* {{{ */
+void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name_len, zend_ffi_val *val, int64_t *min, int64_t *max, int64_t *last) /* {{{ */
 {
 	if (!FFI_G(error)) {
 		zend_ffi_symbol *sym;
+		const zend_ffi_type *sym_type;
 		int64_t value;
 		zend_ffi_type *enum_type = ZEND_FFI_TYPE(enum_dcl->type);
+		zend_bool overflow = 0;
+		zend_bool is_signed =
+			(enum_type->enumeration.kind == ZEND_FFI_TYPE_SINT8 ||
+			 enum_type->enumeration.kind == ZEND_FFI_TYPE_SINT16 ||
+			 enum_type->enumeration.kind == ZEND_FFI_TYPE_SINT32 ||
+			 enum_type->enumeration.kind == ZEND_FFI_TYPE_SINT64);
 
 		ZEND_ASSERT(enum_type && enum_type->kind == ZEND_FFI_TYPE_ENUM);
 		if (val->kind == ZEND_FFI_VAL_EMPTY) {
-			value = enum_type->enumeration.last + 1;
+			if (is_signed) {
+				if (*last == 0x7FFFFFFFFFFFFFFFLL) {
+					overflow = 1;
+				}
+			} else {
+				if (enum_type->enumeration.kind != ZEND_FFI_TYPE_VOID
+				 && (uint64_t)*last == 0xFFFFFFFFFFFFFFFFULL) {
+					overflow = 1;
+				}
+			}
+			value = *last + 1;
 		} else if (val->kind == ZEND_FFI_VAL_CHAR) {
+			if (!is_signed && val->ch < 0) {
+				if ((uint64_t)*max > 0x7FFFFFFFFFFFFFFFULL) {
+					overflow = 1;
+				} else {
+					is_signed = 1;
+				}
+			}
 			value = val->ch;
 		} else if (val->kind == ZEND_FFI_VAL_INT32 || val->kind == ZEND_FFI_VAL_INT64) {
+			if (!is_signed && val->i64 < 0) {
+				if ((uint64_t)*max > 0x7FFFFFFFFFFFFFFFULL) {
+					overflow = 1;
+				} else {
+					is_signed = 1;
+				}
+			}
 			value = val->i64;
 		} else if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_UINT64) {
+			if (is_signed && val->u64 > 0x7FFFFFFFFFFFFFFFULL) {
+				overflow = 1;
+			}
 			value = val->u64;
 		} else {
-			zend_spprintf(&FFI_G(error), 0, "enumerator value must be an integer at line %d", FFI_G(line));
+			zend_spprintf(&FFI_G(error), 0, "enumerator value '%.*s' must be an integer at line %d", name_len, name, FFI_G(line));
 			return;
 		}
+
+		if (overflow) {
+			zend_spprintf(&FFI_G(error), 0, "overflow in enumeration values '%.*s' at line %d", name_len, name, FFI_G(line));
+			return;
+		}
+
+		if (is_signed) {
+			*min = MIN(*min, value);
+			*max = MAX(*max, value);
+			if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
+			 && *min >= -0x7FLL-1 && *max <= 0x7FLL) {
+			 	sym_type = &zend_ffi_type_sint8;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT8;
+				enum_type->size = 1;
+			} else if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
+			 && *min >= -0x7FFFLL-1 && *max <= 0x7FFFLL) {
+			 	sym_type = &zend_ffi_type_sint16;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT16;
+				enum_type->size = 2;
+			} else if (*min >= -0x7FFFFFFFLL-1 && *max <= 0x7FFFFFFFLL) {
+			 	sym_type = &zend_ffi_type_sint32;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT32;
+				enum_type->size = 4;
+			} else {
+			 	sym_type = &zend_ffi_type_sint64;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT64;
+				enum_type->size = 8;
+			}
+		} else {
+			*min = MIN((uint64_t)*min, (uint64_t)value);
+			*max = MAX((uint64_t)*max, (uint64_t)value);
+			if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
+			 && (uint64_t)*max <= 0xFFULL) {
+			 	sym_type = &zend_ffi_type_uint8;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT8;
+				enum_type->size = 1;
+			} else if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
+			 && (uint64_t)*max <= 0xFFFFULL) {
+			 	sym_type = &zend_ffi_type_uint16;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT16;
+				enum_type->size = 2;
+			} else if ((uint64_t)*max <= 0xFFFFFFFFULL) {
+			 	sym_type = &zend_ffi_type_uint32;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT32;
+				enum_type->size = 4;
+			} else {
+			 	sym_type = &zend_ffi_type_uint64;
+				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT64;
+				enum_type->size = 8;
+			}
+		}
+		*last = value;
 
 		if (!FFI_G(symbols)) {
 			ALLOC_HASHTABLE(FFI_G(symbols));
@@ -2315,13 +2452,8 @@ void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name
 		} else {
 			sym = emalloc(sizeof(zend_ffi_symbol));
 			sym->kind  = ZEND_FFI_SYM_CONST;
-			sym->type  = NULL;
+			sym->type  = (zend_ffi_type*)sym_type;
 			sym->value = value;
-			enum_type->enumeration.last = value;
-			if (value > 0xffffffff) {
-				// TODO: enum/type size???
-				enum_type->size = 8;
-			}
 			zend_hash_str_add_new_ptr(FFI_G(symbols), name, name_len, sym);
 		}
 	}

@@ -224,7 +224,7 @@ static int parse_struct_declaration(int sym, zend_ffi_dcl *struct_dcl);
 static int parse_struct_declarator(int sym, zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl);
 static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl);
 static int parse_enumerator_list(int sym, zend_ffi_dcl *enum_dcl);
-static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl);
+static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl, int64_t *min, int64_t *max, int64_t *last);
 static int parse_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_t *name_len);
 static int parse_abstract_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_t *name_len);
 static int parse_pointer(int sym, zend_ffi_dcl *dcl);
@@ -1787,7 +1787,8 @@ static int parse_enumerator_list(int sym, zend_ffi_dcl *enum_dcl) {
 	const unsigned char *save_text;
 	int   save_line;
 	int alt268;
-	sym = parse_enumerator(sym, enum_dcl);
+	int64_t min = 0, max = 0, last = -1;
+	sym = parse_enumerator(sym, enum_dcl, &min, &max, &last);
 	while (1) {
 		save_pos  = yy_pos;
 		save_text = yy_text;
@@ -1821,7 +1822,7 @@ _yy_state_268:
 			break;
 		}
 		sym = get_sym();
-		sym = parse_enumerator(sym, enum_dcl);
+		sym = parse_enumerator(sym, enum_dcl, &min, &max, &last);
 	}
 	if (alt268 == 271) {
 		sym = get_sym();
@@ -1829,7 +1830,7 @@ _yy_state_268:
 	return sym;
 }
 
-static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl) {
+static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl, int64_t *min, int64_t *max, int64_t *last) {
 	const char *name;
 	size_t name_len;
 	zend_ffi_val val = {.kind = ZEND_FFI_VAL_EMPTY};
@@ -1838,7 +1839,7 @@ static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl) {
 		sym = get_sym();
 		sym = parse_constant_expression(sym, &val);
 	}
-	zend_ffi_add_enum_val(enum_dcl, name, name_len, &val);
+	zend_ffi_add_enum_val(enum_dcl, name, name_len, &val, min, max, last);
 	return sym;
 }
 

@@ -296,14 +296,15 @@ enum_specifier(zend_ffi_dcl *dcl):
 ;
 
 enumerator_list(zend_ffi_dcl *enum_dcl):
-	enumerator(enum_dcl)
+	{int64_t min = 0, max = 0, last = -1;}
+	enumerator(enum_dcl, &min, &max, &last)
 	(	","
-		enumerator(enum_dcl)
+		enumerator(enum_dcl, &min, &max, &last)
 	)*
 	","?
 ;
 
-enumerator(zend_ffi_dcl *enum_dcl):
+enumerator(zend_ffi_dcl *enum_dcl, int64_t *min, int64_t *max, int64_t *last):
 	{const char *name;}
 	{size_t name_len;}
 	{zend_ffi_val val = {.kind = ZEND_FFI_VAL_EMPTY};}
@@ -311,7 +312,7 @@ enumerator(zend_ffi_dcl *enum_dcl):
 	(	"="
 		constant_expression(&val)
 	)?
-	{zend_ffi_add_enum_val(enum_dcl, name, name_len, &val);}
+	{zend_ffi_add_enum_val(enum_dcl, name, name_len, &val, min, max, last);}
 ;
 
 declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
