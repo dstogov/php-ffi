@@ -50,8 +50,8 @@ test_align(4, "struct {uint32_t a; char b __attribute__((packed));}");
 test_size(16, "struct  __attribute__((aligned(16))) {char a; uint32_t b;}");
 test_align(16, "struct  __attribute__((aligned(16))) {char a; uint32_t b;}");
 
-//test_size(16, "struct {char a; uint32_t b;} __attribute__((aligned(16)))");
-//test_align(16, "struct {char a; uint32_t b;} __attribute__((aligned(16)))");
+test_size(16, "struct {char a; uint32_t b;} __attribute__((aligned(16)))");
+test_align(16, "struct {char a; uint32_t b;} __attribute__((aligned(16)))");
 
 test_size(8, "struct  {char a; uint32_t b __attribute__((aligned(1)));}");
 test_align(4, "struct  {char a; uint32_t b __attribute__((aligned(1)));}");

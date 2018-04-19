@@ -130,6 +130,7 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 				{/*align_as_val???*/}
 			)
 			")"
+		|	attributes(dcl)
 		|	type_qualifier(dcl)
 		|	type_specifier(dcl)
 		)
@@ -232,7 +233,7 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 		(	"{"
 			struct_declaration(dcl)*
 			"}"
-			/*attributes(dcl)?*/
+			attributes(dcl)?+
 			{zend_ffi_adjust_struct_size(dcl);}
 			{zend_ffi_declare_tag(name, name_len, dcl, 0);}
 		)?
@@ -240,7 +241,7 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 		{zend_ffi_make_struct_type(dcl);}
 		struct_declaration(dcl)*
 		"}"
-		/*attributes(dcl)?*/
+		attributes(dcl)?+
 		{zend_ffi_adjust_struct_size(dcl);}
 	)
 ;
@@ -287,14 +288,14 @@ enum_specifier(zend_ffi_dcl *dcl):
 			"{"
 			enumerator_list(dcl)
 			"}"
-			/*attributes(dcl)?*/
+			attributes(dcl)?+
 		|	{zend_ffi_declare_tag(name, name_len, dcl, 1);}
 		)
 	|	"{"
 		{zend_ffi_make_enum_type(dcl);}
 		enumerator_list(dcl)
 		"}"
-		/*attributes(dcl)?*/
+		attributes(dcl)?+
 	)
 ;
 
