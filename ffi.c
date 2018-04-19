@@ -64,8 +64,9 @@ typedef enum _zend_ffi_type_kind {
 
 struct _zend_ffi_type {
 	zend_ffi_type_kind     kind;
-	uint32_t               attr;
 	size_t                 size;
+	uint32_t               align;
+	uint32_t               attr;
 	union {
 		struct {
 			zend_ffi_type_kind kind;
@@ -1600,6 +1601,8 @@ static int zend_ffi_subst_type(zend_ffi_type **dcl, zend_ffi_type *type) /* {{{ 
 				}
 			} ZEND_HASH_FOREACH_END();
 			break;
+		default:
+			break;
 	}
 	return 0;
 } /* }}} */
@@ -1742,7 +1745,6 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	zend_ffi_dcl dcl = {0,0,NULL};
 	zend_ffi_type *type;
 	zend_ffi_cdata *cdata;
-	void *ptr;
 	zval *zv;
 
 	ZEND_PARSE_PARAMETERS_START(2, 2)
@@ -1831,6 +1833,22 @@ ZEND_METHOD(FFI, sizeof) /* {{{ */
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	type = ZEND_FFI_TYPE(cdata->type);
 	RETURN_LONG(type->size);
+}
+/* }}} */
+
+ZEND_METHOD(FFI, alignof) /* {{{ */
+{
+	zval *zv;
+	zend_ffi_cdata *cdata;
+	zend_ffi_type *type;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce);
+	ZEND_PARSE_PARAMETERS_END();
+
+	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
+	type = ZEND_FFI_TYPE(cdata->type);
+	RETURN_LONG(type->align);
 }
 /* }}} */
 
@@ -1946,6 +1964,7 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, alignof, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memcpy, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memcmp, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memset, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -2041,19 +2060,19 @@ ZEND_MINFO_FUNCTION(ffi)
 
 #define ZEND_FFI_VERSION "0.1.0"
 
-static const zend_ffi_type zend_ffi_type_void = {.kind=ZEND_FFI_TYPE_VOID, .size=0};
-static const zend_ffi_type zend_ffi_type_char = {.kind=ZEND_FFI_TYPE_CHAR, .size=1};
-static const zend_ffi_type zend_ffi_type_sint8 = {.kind=ZEND_FFI_TYPE_SINT8, .size=1};
-static const zend_ffi_type zend_ffi_type_uint8 = {.kind=ZEND_FFI_TYPE_UINT8, .size=1};
-static const zend_ffi_type zend_ffi_type_sint16 = {.kind=ZEND_FFI_TYPE_SINT16, .size=2};
-static const zend_ffi_type zend_ffi_type_uint16 = {.kind=ZEND_FFI_TYPE_UINT16, .size=2};
-static const zend_ffi_type zend_ffi_type_sint32 = {.kind=ZEND_FFI_TYPE_SINT32, .size=4};
-static const zend_ffi_type zend_ffi_type_uint32 = {.kind=ZEND_FFI_TYPE_UINT32, .size=4};
-static const zend_ffi_type zend_ffi_type_sint64 = {.kind=ZEND_FFI_TYPE_SINT64, .size=8};
-static const zend_ffi_type zend_ffi_type_uint64 = {.kind=ZEND_FFI_TYPE_UINT64, .size=8};
-static const zend_ffi_type zend_ffi_type_float = {.kind=ZEND_FFI_TYPE_FLOAT, .size=4};
-static const zend_ffi_type zend_ffi_type_double = {.kind=ZEND_FFI_TYPE_DOUBLE, .size=8};
-static const zend_ffi_type zend_ffi_type_long_double = {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=10};
+static const zend_ffi_type zend_ffi_type_void = {.kind=ZEND_FFI_TYPE_VOID, .size=1, .align=1};
+static const zend_ffi_type zend_ffi_type_char = {.kind=ZEND_FFI_TYPE_CHAR, .size=1, .align=_Alignof(char)};
+static const zend_ffi_type zend_ffi_type_sint8 = {.kind=ZEND_FFI_TYPE_SINT8, .size=1, .align=_Alignof(int8_t)};
+static const zend_ffi_type zend_ffi_type_uint8 = {.kind=ZEND_FFI_TYPE_UINT8, .size=1, .align=_Alignof(uint8_t)};
+static const zend_ffi_type zend_ffi_type_sint16 = {.kind=ZEND_FFI_TYPE_SINT16, .size=2, .align=_Alignof(int16_t)};
+static const zend_ffi_type zend_ffi_type_uint16 = {.kind=ZEND_FFI_TYPE_UINT16, .size=2, .align=_Alignof(uint16_t)};
+static const zend_ffi_type zend_ffi_type_sint32 = {.kind=ZEND_FFI_TYPE_SINT32, .size=4, .align=_Alignof(int64_t)};
+static const zend_ffi_type zend_ffi_type_uint32 = {.kind=ZEND_FFI_TYPE_UINT32, .size=4, .align=_Alignof(uint32_t)};
+static const zend_ffi_type zend_ffi_type_sint64 = {.kind=ZEND_FFI_TYPE_SINT64, .size=8, .align=_Alignof(int64_t)};
+static const zend_ffi_type zend_ffi_type_uint64 = {.kind=ZEND_FFI_TYPE_UINT64, .size=8, .align=_Alignof(uint64_t)};
+static const zend_ffi_type zend_ffi_type_float = {.kind=ZEND_FFI_TYPE_FLOAT, .size=sizeof(float), .align=_Alignof(float)};
+static const zend_ffi_type zend_ffi_type_double = {.kind=ZEND_FFI_TYPE_DOUBLE, .size=sizeof(double), .align=_Alignof(double)};
+static const zend_ffi_type zend_ffi_type_long_double = {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=sizeof(long double), .align=_Alignof(long double)};
 
 const struct {
 	const char *name;
@@ -2329,9 +2348,17 @@ void zend_ffi_make_enum_type(zend_ffi_dcl *dcl) /* {{{ */
 	zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_ENUM;
 	type->attr = (dcl->attr & ZEND_FFI_ENUM_ATTRS);
-	type->size = 0;
-	type->enumeration.kind = ZEND_FFI_TYPE_VOID;
+	if (type->attr & ZEND_FFI_ATTR_PACKED) {
+		type->size = zend_ffi_type_uint8.size;
+		type->align = zend_ffi_type_uint8.align;
+		type->enumeration.kind = ZEND_FFI_TYPE_UINT8;
+	} else {
+		type->size = zend_ffi_type_uint32.size;
+		type->align = zend_ffi_type_uint32.align;
+		type->enumeration.kind = ZEND_FFI_TYPE_UINT32;
+	}
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+	dcl->attr &= ~ZEND_FFI_ENUM_ATTRS;
 }
 /* }}} */
 
@@ -2356,7 +2383,7 @@ void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name
 					overflow = 1;
 				}
 			} else {
-				if (enum_type->enumeration.kind != ZEND_FFI_TYPE_VOID
+				if ((*min != 0 || *max != 0)
 				 && (uint64_t)*last == 0xFFFFFFFFFFFFFFFFULL) {
 					overflow = 1;
 				}
@@ -2401,21 +2428,13 @@ void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name
 			if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
 			 && *min >= -0x7FLL-1 && *max <= 0x7FLL) {
 			 	sym_type = &zend_ffi_type_sint8;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT8;
-				enum_type->size = 1;
 			} else if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
 			 && *min >= -0x7FFFLL-1 && *max <= 0x7FFFLL) {
 			 	sym_type = &zend_ffi_type_sint16;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT16;
-				enum_type->size = 2;
 			} else if (*min >= -0x7FFFFFFFLL-1 && *max <= 0x7FFFFFFFLL) {
 			 	sym_type = &zend_ffi_type_sint32;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT32;
-				enum_type->size = 4;
 			} else {
 			 	sym_type = &zend_ffi_type_sint64;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_SINT64;
-				enum_type->size = 8;
 			}
 		} else {
 			*min = MIN((uint64_t)*min, (uint64_t)value);
@@ -2423,23 +2442,18 @@ void zend_ffi_add_enum_val(zend_ffi_dcl *enum_dcl, const char *name, size_t name
 			if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
 			 && (uint64_t)*max <= 0xFFULL) {
 			 	sym_type = &zend_ffi_type_uint8;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT8;
-				enum_type->size = 1;
 			} else if ((enum_type->attr & ZEND_FFI_ATTR_PACKED)
 			 && (uint64_t)*max <= 0xFFFFULL) {
 			 	sym_type = &zend_ffi_type_uint16;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT16;
-				enum_type->size = 2;
 			} else if ((uint64_t)*max <= 0xFFFFFFFFULL) {
 			 	sym_type = &zend_ffi_type_uint32;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT32;
-				enum_type->size = 4;
 			} else {
 			 	sym_type = &zend_ffi_type_uint64;
-				enum_type->enumeration.kind = ZEND_FFI_TYPE_UINT64;
-				enum_type->size = 8;
 			}
 		}
+		enum_type->enumeration.kind = sym_type->kind;
+		enum_type->size = sym_type->size;
+		enum_type->align = sym_type->align;
 		*last = value;
 
 		if (!FFI_G(symbols)) {
@@ -2466,11 +2480,13 @@ void zend_ffi_make_struct_type(zend_ffi_dcl *dcl) /* {{{ */
 	type->kind = ZEND_FFI_TYPE_STRUCT;
 	type->attr = (dcl->attr & ZEND_FFI_STRUCT_ATTRS);
 	type->size = 0;
+	type->align = 1;
 	if (dcl->flags & ZEND_FFI_DCL_UNION) {
 		type->attr |= ZEND_FFI_ATTR_UNION;
 	}
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	zend_hash_init(&type->record.fields, 0, NULL, zend_ffi_field_hash_dtor, 0);
+	dcl->attr &= ~ZEND_FFI_STRUCT_ATTRS;
 }
 /* }}} */
 
@@ -2484,6 +2500,7 @@ static int zend_ffi_validate_field_type(zend_ffi_type *type, zend_ffi_type *pare
 			return zend_ffi_validate_var_type(type);
 		}
 	}
+	return SUCCESS;
 }
 /* }}} */
 
@@ -2505,14 +2522,16 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 
 		// TODO: anonymous struct/union ???
 		field = emalloc(sizeof(zend_ffi_field));
+		if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
+			struct_type->align = MAX(struct_type->align, field_type->align);
+		}
 		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
 			field->offset = 0;
 			struct_type->size = MAX(struct_type->size, field_type->size);
-		} else if (struct_type->attr & ZEND_FFI_ATTR_PACKED) {
-			field->offset = struct_type->size;
-			struct_type->size += field_type->size;
 		} else {
-			// TODO: alignment ???
+			if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
+				struct_type->size = ((struct_type->size + (struct_type->align - 1)) / struct_type->align) * struct_type->align;
+			}
 			field->offset = struct_type->size;
 			struct_type->size += field_type->size;
 		}
@@ -2557,17 +2576,30 @@ void zend_ffi_skip_bit_field(zend_ffi_dcl *struct_dcl, zend_ffi_val *bits) /* {{
 }
 /* }}} */
 
+void zend_ffi_adjust_struct_size(zend_ffi_dcl *dcl) /* {{{ */
+{
+	zend_ffi_type *struct_type = ZEND_FFI_TYPE(dcl->type);
+
+	ZEND_ASSERT(struct_type->kind == ZEND_FFI_TYPE_STRUCT);
+	if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED)) {
+		struct_type->size = ((struct_type->size + (struct_type->align - 1)) / struct_type->align) * struct_type->align;
+	}
+}
+/* }}} */
+
 void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl) /* {{{ */
 {
 	zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_POINTER;
 	type->attr = (dcl->attr & ZEND_FFI_POINTER_ATTRS);
 	type->size = sizeof(void*);
+	type->align = _Alignof(void*);
 	zend_ffi_finalize_type(dcl);
 	type->pointer.type = dcl->type;
 	type->pointer.is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	dcl->flags &= ~ZEND_FFI_DCL_TYPE_QUALIFIERS;
+	dcl->attr &= ~ZEND_FFI_POINTER_ATTRS;
 }
 /* }}} */
 
@@ -2641,13 +2673,15 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 	type = emalloc(sizeof(zend_ffi_type));
 	type->kind = ZEND_FFI_TYPE_ARRAY;
 	type->attr = (dcl->attr & ZEND_FFI_ARRAY_ATTRS);
-	// TODO: alignment ???
+	// TODO: alignment ????
 	type->size = length * element_type->size;
+	type->align = element_type->align;
 	type->array.type = dcl->type;
 	type->array.length = length;
 	type->array.is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	dcl->flags &= ~ZEND_FFI_DCL_TYPE_QUALIFIERS;
+	dcl->attr &= ~ZEND_FFI_ARRAY_ATTRS;
 }
 /* }}} */
 
@@ -2716,12 +2750,14 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 	type->kind = ZEND_FFI_TYPE_FUNC;
 	type->attr = (dcl->attr & ZEND_FFI_FUNC_ATTRS);
 	type->size = sizeof(void*);
+	type->align = 1;
 	type->func.ret_type = dcl->type;
 	type->func.variadic = variadic;
 	// TODO: verify ABI ???
 	type->func.abi = FFI_DEFAULT_ABI; //???
 	type->func.args = args;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+	dcl->attr &= ~ZEND_FFI_FUNC_ATTRS;
 }
 /* }}} */
 
@@ -2745,6 +2781,7 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 				new_type->kind = ZEND_FFI_TYPE_POINTER;
 				new_type->attr = (type->attr & ZEND_FFI_POINTER_ATTRS);
 				new_type->size = sizeof(void*);
+				new_type->align = _Alignof(void*);
 				new_type->pointer.type = ZEND_FFI_TYPE(type->array.type);
 				new_type->pointer.is_const = new_type->array.is_const;
 				arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
@@ -2754,6 +2791,7 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 			new_type->kind = ZEND_FFI_TYPE_POINTER;
 			new_type->attr = 0;
 			new_type->size = sizeof(void*);
+			new_type->align = _Alignof(void*);
 			new_type->pointer.type = arg_dcl->type;
 			new_type->pointer.is_const = 0;
 			arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
@@ -2899,7 +2937,7 @@ void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len
 	} else if (name_len == sizeof("sysv_abi")-1 && memcmp(name, "sysv_abi", sizeof("sysv_abi")-1) == 0) {
 		dcl->attr |= ZEND_FFI_ATTR_SYSV_ABI;
 	} else if (name_len == sizeof("aligned")-1 && memcmp(name, "aligned", sizeof("aligned")-1) == 0) {
-		// alignment ???
+		// alignment ????
 	} else if (name_len == sizeof("packed")-1 && memcmp(name, "packed", sizeof("packed")-1) == 0) {
 		dcl->attr |= ZEND_FFI_ATTR_PACKED;
 	} else if (name_len == sizeof("ms_struct")-1 && memcmp(name, "ms_struct", sizeof("ms_struct")-1) == 0) {
@@ -2937,7 +2975,7 @@ void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t na
 			}
 		}
 	} else if (n == 0 && name_len == sizeof("aligned")-1 && memcmp(name, "aligned", sizeof("aligned")-1) == 0) {
-		// alignment ???
+		// alignment ????
 	} else if (name_len == sizeof("format")-1 && memcmp(name, "format", sizeof("format")-1) == 0) {
 		/* ignore */
 	} else if (name_len == sizeof("deprecated")-1 && memcmp(name, "deprecated", sizeof("deprecated")-1) == 0) {
@@ -2970,8 +3008,9 @@ static void zend_ffi_nested_type(zend_ffi_type *type, zend_ffi_type *nested_type
 			} else {
 				zend_ffi_nested_type(type, nested_type->array.type);
 			}
-			// TODO: alignment ???
+			// TODO: alignment ????
 			nested_type->size = nested_type->array.length * ZEND_FFI_TYPE(nested_type->array.type)->size;
+			nested_type->align = ZEND_FFI_TYPE(nested_type->array.type)->align;
 			break;
 		case ZEND_FFI_TYPE_FUNC:
 			/* "char" is used as a terminator of nested declaration */
@@ -3533,22 +3572,22 @@ void zend_ffi_expr_sizeof_val(zend_ffi_val *val) /* {{{ */
 {
 	if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_INT32) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 4;
+		val->u64 = zend_ffi_type_uint32.size;
 	} else if (val->kind == ZEND_FFI_VAL_UINT64 || val->kind == ZEND_FFI_VAL_INT64) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 8;
+		val->u64 = zend_ffi_type_uint64.size;
 	} else if (val->kind == ZEND_FFI_VAL_FLOAT) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 4;
+		val->u64 = zend_ffi_type_float.size;
 	} else if (val->kind == ZEND_FFI_VAL_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 8;
+		val->u64 = zend_ffi_type_double.size;
 	} else if (val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 10;
+		val->u64 = zend_ffi_type_long_double.size;
 	} else if (val->kind == ZEND_FFI_VAL_CHAR) {
 		val->kind = ZEND_FFI_VAL_UINT32;
-		val->u64 = 1;
+		val->u64 = zend_ffi_type_char.size;
 	} else if (val->kind == ZEND_FFI_VAL_STRING) {
 		if (memchr(val->str, '\\', val->len)) {
 			// TODO: support for escape sequences ???
@@ -3568,6 +3607,43 @@ void zend_ffi_expr_sizeof_type(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
 	zend_ffi_finalize_type(dcl);
 	val->kind = (dcl->type->size > 0xffffffff) ? ZEND_FFI_VAL_UINT64 : ZEND_FFI_VAL_UINT32;
 	val->u64 = dcl->type->size;
+}
+/* }}} */
+
+void zend_ffi_expr_alignof_val(zend_ffi_val *val) /* {{{ */
+{
+	if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_INT32) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_uint32.align;
+	} else if (val->kind == ZEND_FFI_VAL_UINT64 || val->kind == ZEND_FFI_VAL_INT64) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_uint64.align;
+	} else if (val->kind == ZEND_FFI_VAL_FLOAT) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_float.align;
+	} else if (val->kind == ZEND_FFI_VAL_DOUBLE) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_double.align;
+	} else if (val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_long_double.align;
+	} else if (val->kind == ZEND_FFI_VAL_CHAR) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = zend_ffi_type_char.size;
+	} else if (val->kind == ZEND_FFI_VAL_STRING) {
+		val->kind = ZEND_FFI_VAL_UINT32;
+		val->u64 = _Alignof(char*);
+	} else {
+		val->kind = ZEND_FFI_VAL_ERROR;
+	}
+}
+/* }}} */
+
+void zend_ffi_expr_alignof_type(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
+{
+	zend_ffi_finalize_type(dcl);
+	val->kind = ZEND_FFI_VAL_UINT32;
+	val->u64 = dcl->type->align;
 }
 /* }}} */
 

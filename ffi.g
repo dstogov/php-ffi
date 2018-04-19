@@ -231,6 +231,7 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 		{zend_ffi_declare_tag(name, name_len, dcl, 1);}
 		(	"{"
 			struct_declaration(dcl)*
+			{zend_ffi_adjust_struct_size(dcl);}
 			"}"
 			/*attributes(dcl)?*/
 			{zend_ffi_declare_tag(name, name_len, dcl, 0);}
@@ -238,6 +239,7 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 	|	"{"
 		{zend_ffi_make_struct_type(dcl);}
 		struct_declaration(dcl)*
+		{zend_ffi_adjust_struct_size(dcl);}
 		"}"
 		/*attributes(dcl)?*/
 	)
@@ -262,15 +264,16 @@ struct_declarator(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl):
 	(	declarator(field_dcl, &name, &name_len)
 		(	":"
 			constant_expression(&bits)
+			attributes(field_dcl)?
 			{zend_ffi_add_bit_field(struct_dcl, name, name_len, field_dcl, &bits);}
 		|	/*empty */
+			attributes(field_dcl)?
 			{zend_ffi_add_field(struct_dcl, name, name_len, field_dcl);}
 		)
 	|	":"
 		constant_expression(&bits)
 		{zend_ffi_skip_bit_field(struct_dcl, &bits);}
 	)
-	attributes(struct_dcl)?
 ;
 
 enum_specifier(zend_ffi_dcl *dcl):
@@ -635,7 +638,7 @@ unary_expression(zend_ffi_val *val):
 	{size_t name_len;}
 	{zend_ffi_dcl dcl = {0, 0, NULL};}
 	(	ID(&name, &name_len)
-		{zend_ffi_resolve_const(name, name_len, val);} // support for constant names ???
+		{zend_ffi_resolve_const(name, name_len, val);}
 		(
 			(	"["
 				expr_list
@@ -650,7 +653,7 @@ unary_expression(zend_ffi_val *val):
 		    |	"++"
 			|	"--"
 			)
-			{zend_ffi_val_error(val);} // support for constant names ???
+			{zend_ffi_val_error(val);}
 		)*
 	|	OCTNUMBER(val)
 	|	DECNUMBER(val)
@@ -692,6 +695,19 @@ unary_expression(zend_ffi_val *val):
 			type_name(&dcl)
 			")"
 			{zend_ffi_expr_sizeof_type(val, &dcl);}
+		)
+	|	"_Alignof"
+		"("
+		type_name(&dcl)
+		")"
+		{zend_ffi_expr_alignof_type(val, &dcl);}
+	|	"__alignof__"
+		(	unary_expression(val)
+			{zend_ffi_expr_alignof_val(val);}
+		|	"("
+			type_name(&dcl)
+			")"
+			{zend_ffi_expr_alignof_type(val, &dcl);}
 		)
 	)
 ;
