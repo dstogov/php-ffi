@@ -129,6 +129,7 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 
 typedef struct _zend_ffi_dcl {
 	uint32_t       flags;
+	uint32_t       align;
 	uint16_t       attr;
 	zend_ffi_type *type;
 } zend_ffi_dcl;

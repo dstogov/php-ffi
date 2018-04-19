@@ -1434,7 +1434,7 @@ static int get_sym(void) {
 
 static int parse_declarations(int sym) {
 	while (YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY__NORETURN,YY__ALIGNAS,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID), "\370\347\377\077\002\000\000\000\010\000")) {
-		zend_ffi_dcl common_dcl = {0, 0, NULL};
+		zend_ffi_dcl common_dcl = {0, 0, 0, NULL};
 		sym = parse_declaration_specifiers(sym, &common_dcl);
 		if (sym == YY__STAR || sym == YY_ID || sym == YY__LPAREN) {
 			const char *name;
@@ -1513,7 +1513,7 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 				}
 				sym = get_sym();
 				if (YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\377\077\202\000\000\000\010\000")) {
-					zend_ffi_dcl align_dcl = {0, 0, NULL};
+					zend_ffi_dcl align_dcl = {0, 0, 0, NULL};
 					sym = parse_type_name(sym, &align_dcl);
 					/*align_as_type???*/
 				} else if (YY_IN_SET(sym, (YY__LPAREN,YY_ID,YY_OCTNUMBER,YY_DECNUMBER,YY_HEXNUMBER,YY_FLOATNUMBER,YY_STRING,YY_CHARACTER,YY__PLUS_PLUS,YY__MINUS_MINUS,YY__AND,YY__STAR,YY__PLUS,YY__MINUS,YY__TILDE,YY__BANG,YY_SIZEOF,YY__ALIGNOF,YY___ALIGNOF__), "\000\010\000\000\010\100\200\361\377\003")) {
@@ -1710,11 +1710,11 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 			while (YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\377\077\202\000\000\000\010\000")) {
 				sym = parse_struct_declaration(sym, dcl);
 			}
-			zend_ffi_adjust_struct_size(dcl);
 			if (sym != YY__RBRACE) {
 				yy_error_sym("'}' expected, got '%s'", sym);
 			}
 			sym = get_sym();
+			zend_ffi_adjust_struct_size(dcl);
 			zend_ffi_declare_tag(name, name_len, dcl, 0);
 		}
 	} else if (sym == YY__LBRACE) {
@@ -1723,17 +1723,17 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 		while (YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY___ATTRIBUTE__), "\000\340\377\077\202\000\000\000\010\000")) {
 			sym = parse_struct_declaration(sym, dcl);
 		}
-		zend_ffi_adjust_struct_size(dcl);
 		if (sym != YY__RBRACE) {
 			yy_error_sym("'}' expected, got '%s'", sym);
 		}
 		sym = get_sym();
+		zend_ffi_adjust_struct_size(dcl);
 	}
 	return sym;
 }
 
 static int parse_struct_declaration(int sym, zend_ffi_dcl *struct_dcl) {
-	zend_ffi_dcl common_field_dcl = {0, 0, NULL};
+	zend_ffi_dcl common_field_dcl = {0, 0, 0, NULL};
 	sym = parse_specifier_qualifier_list(sym, &common_field_dcl);
 	sym = parse_struct_declarator(sym, struct_dcl, &common_field_dcl);
 	while (sym == YY__COMMA) {
@@ -1877,7 +1877,7 @@ static int parse_enumerator(int sym, zend_ffi_dcl *enum_dcl, int64_t *min, int64
 }
 
 static int parse_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_t *name_len) {
-	zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, NULL};
+	zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, NULL};
 	zend_bool nested = 0;
 	sym = parse_pointer(sym, dcl);
 	if (sym == YY_ID) {
@@ -1902,7 +1902,7 @@ static int parse_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_
 }
 
 static int parse_abstract_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_t *name_len) {
-	zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, NULL};
+	zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, NULL};
 	zend_bool nested = 0;
 	sym = parse_pointer(sym, dcl);
 	if (sym == YY_ID || sym == YY__LPAREN) {
@@ -1947,7 +1947,7 @@ static int parse_array_or_function_declarators(int sym, zend_ffi_dcl *dcl) {
 	int alt234;
 	int alt230;
 	int alt244;
-	zend_ffi_dcl dummy = {0, 0, NULL};
+	zend_ffi_dcl dummy = {0, 0, 0, NULL};
 	zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};
 	HashTable *args = NULL;
 	zend_bool variadic = 0;
@@ -2130,7 +2130,7 @@ _yy_state_244:
 static int parse_parameter_declaration(int sym, HashTable **args) {
 	const char *name = NULL;
 	size_t name_len = 0;
-	zend_ffi_dcl param_dcl = {0, 0, NULL};
+	zend_ffi_dcl param_dcl = {0, 0, 0, NULL};
 	sym = parse_specifier_qualifier_list(sym, &param_dcl);
 	sym = parse_abstract_declarator(sym, &param_dcl, &name, &name_len);
 	zend_ffi_add_arg(args, name, name_len, &param_dcl);
@@ -2507,7 +2507,7 @@ static int parse_multiplicative_expression(int sym, zend_ffi_val *val) {
 
 static int parse_cast_expression(int sym, zend_ffi_val *val) {
 	int do_cast = 0;
-	zend_ffi_dcl dcl = {0, 0, NULL};
+	zend_ffi_dcl dcl = {0, 0, 0, NULL};
 	if (sym == YY__LPAREN) {
 		sym = get_sym();
 		sym = parse_type_name(sym, &dcl);
@@ -2525,7 +2525,7 @@ static int parse_cast_expression(int sym, zend_ffi_val *val) {
 static int parse_unary_expression(int sym, zend_ffi_val *val) {
 	const char *name;
 	size_t name_len;
-	zend_ffi_dcl dcl = {0, 0, NULL};
+	zend_ffi_dcl dcl = {0, 0, 0, NULL};
 	switch (sym) {
 		case YY_ID:
 			sym = parse_ID(sym, &name, &name_len);
