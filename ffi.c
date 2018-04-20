@@ -387,7 +387,7 @@ again:
 					type = ZEND_FFI_TYPE(type->pointer.type);
 					cdata_ptr = cdata->ptr;
 				} else {
-					cdata_ptr = *(void**)cdata->ptr;;
+					cdata_ptr = *(void**)cdata->ptr;
 				}
 				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)ptr = cdata_ptr;
@@ -2164,6 +2164,8 @@ static const zend_ffi_type zend_ffi_type_float = {.kind=ZEND_FFI_TYPE_FLOAT, .si
 static const zend_ffi_type zend_ffi_type_double = {.kind=ZEND_FFI_TYPE_DOUBLE, .size=sizeof(double), .align=_Alignof(double)};
 static const zend_ffi_type zend_ffi_type_long_double = {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=sizeof(long double), .align=_Alignof(long double)};
 
+static const zend_ffi_type zend_ffi_type_ptr = {.kind=ZEND_FFI_TYPE_POINTER, .size=sizeof(void*), .align=_Alignof(void*), .pointer.type = (zend_ffi_type*)&zend_ffi_type_void};
+
 const struct {
 	const char *name;
 	const zend_ffi_type *type;
@@ -2202,6 +2204,10 @@ const struct {
 #else
 	{"off_t",      &zend_ffi_type_sint64},
 #endif
+
+	{"va_list",           &zend_ffi_type_ptr},
+	{"__builtin_va_list", &zend_ffi_type_ptr},
+	{"__gnuc_va_list",    &zend_ffi_type_ptr},
 };
 
 /* {{{ ZEND_GINIT_FUNCTION

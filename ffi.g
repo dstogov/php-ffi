@@ -117,7 +117,7 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 			"register"
 			{dcl->flags |= ZEND_FFI_DCL_REGISTER;}
 //		|	"_Thread_local" // TODO: not-implemented ???
-		|	"inline"
+		|	("inline"|"__inline"|"__inline__")
 			{dcl->flags |= ZEND_FFI_DCL_INLINE;}
 		|	"_Noreturn"
 			{dcl->flags |= ZEND_FFI_DCL_NO_RETURN;}
@@ -162,11 +162,11 @@ type_qualifier_list(zend_ffi_dcl *dcl):
 ;
 
 type_qualifier(zend_ffi_dcl *dcl):
-		"const"
+		("const"|"__const"|"__const__")
 		{dcl->flags |= ZEND_FFI_DCL_CONST;}
-	|	"restrict"
+	|	("restrict"|"__restict"|"__restrict__")
 		{dcl->flags |= ZEND_FFI_DCL_RESTRICT;}
-	|	"volatile"
+	|	("volatile"|"__volatile"|"__volatile__")
 		{dcl->flags |= ZEND_FFI_DCL_VOLATILE;}
 	|	"_Atomic"
 		{dcl->flags |= ZEND_FFI_DCL_ATOMIC;}
@@ -213,7 +213,7 @@ type_specifier(zend_ffi_dcl *dcl):
 		"_Bool"
 		{dcl->flags |= ZEND_FFI_DCL_BOOL;}
 	|	{if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_LONG))) yy_error_sym("Unexpected '%s'", sym);}
-		"_Complex"
+		("_Complex"|"complex"|"__complex"|"__complex__")
 		{dcl->flags |= ZEND_FFI_DCL_COMPLEX;}
 //	|	"_Atomic" "(" type_name ")" // TODO: not-implemented ???
 	|	{if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);}
@@ -437,7 +437,7 @@ type_name(zend_ffi_dcl *dcl):
 
 attributes(zend_ffi_dcl *dcl):
 	(
-		"__attribute__"
+		("__attribute"|"__attribute__")
 		"("
 		"("
 		attrib(dcl)
@@ -719,7 +719,7 @@ unary_expression(zend_ffi_val *val):
 		type_name(&dcl)
 		")"
 		{zend_ffi_expr_alignof_type(val, &dcl);}
-	|	"__alignof__"
+	|	("__alignof"|"__alignof__")
 		(	unary_expression(val)
 			{zend_ffi_expr_alignof_val(val);}
 		|	"("
