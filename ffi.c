@@ -659,6 +659,7 @@ typedef struct _zend_ffi_cdata_iterator {
 	zend_object_iterator it;
 	zend_long key;
 	zval value;
+	zend_bool by_ref;
 } zend_ffi_cdata_iterator;
 
 static void zend_ffi_cdata_it_dtor(zend_object_iterator *iter) /* {{{ */
@@ -689,7 +690,7 @@ static zval *zend_ffi_cdata_it_get_current_data(zend_object_iterator *it) /* {{{
 	ptr = (void*)((char*)cdata->ptr + type->size * iter->it.index);
 
 	zval_ptr_dtor(&iter->value);
-	if (zend_ffi_cdata_to_zval(NULL, ptr, type, BP_VAR_R, &iter->value, cdata->is_const | type->array.is_const) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, iter->by_ref ? BP_VAR_RW : BP_VAR_R, &iter->value, cdata->is_const | type->array.is_const) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 	return &iter->value;
@@ -736,9 +737,6 @@ static zend_object_iterator *zend_ffi_cdata_get_iterator(zend_class_entry *ce, z
 	if (type->kind != ZEND_FFI_TYPE_ARRAY) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to iterate on non C array");
 		return NULL;
-	} else if (by_ref) {
-		zend_throw_error(zend_ffi_exception_ce, "Attempt to iterate on C array by reference");
-		return NULL;
 	}
 
 	iter = emalloc(sizeof(zend_ffi_cdata_iterator));
@@ -748,6 +746,7 @@ static zend_object_iterator *zend_ffi_cdata_get_iterator(zend_class_entry *ce, z
 	ZVAL_COPY(&iter->it.data, object);
 	iter->it.funcs = &zend_ffi_cdata_it_funcs;
 	iter->key = 0;
+	iter->by_ref = by_ref;
 	ZVAL_UNDEF(&iter->value);
 
 	return &iter->it;
