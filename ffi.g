@@ -239,21 +239,27 @@ struct_or_union_specifier(zend_ffi_dcl *dcl):
 		{size_t name_len;}
 		ID(&name, &name_len)
 		{zend_ffi_declare_tag(name, name_len, dcl, 1);}
-		(	"{"
-			struct_declaration(dcl)*
-			"}"
-			attributes(dcl)?+
-			{zend_ffi_adjust_struct_size(dcl);}
+		(	struct_contents(dcl)
 			{zend_ffi_declare_tag(name, name_len, dcl, 0);}
 		)?
-	|	"{"
-		{zend_ffi_make_struct_type(dcl);}
-		struct_declaration(dcl)*
-		"}"
-		attributes(dcl)?+
-		{zend_ffi_adjust_struct_size(dcl);}
+	|	{zend_ffi_make_struct_type(dcl);}
+		struct_contents(dcl)
 	)
 ;
+
+struct_contents(zend_ffi_dcl *dcl):
+	"{"
+	(	struct_declaration(dcl)
+		(	";"
+			struct_declaration(dcl)
+		)*
+		(";")?
+	)?
+    "}"
+	attributes(dcl)?+
+	{zend_ffi_adjust_struct_size(dcl);}
+;
+
 
 struct_declaration(zend_ffi_dcl *struct_dcl):
 	{zend_ffi_dcl common_field_dcl = {0, 0, 0, 0, NULL};}
@@ -264,7 +270,6 @@ struct_declaration(zend_ffi_dcl *struct_dcl):
 		attributes(&field_dcl)?
 		struct_declarator(struct_dcl, &field_dcl)
 	)*
-	";"
 ;
 
 struct_declarator(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl):
