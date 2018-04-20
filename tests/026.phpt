@@ -14,7 +14,7 @@ foreach ($a as &$val) {
 var_dump($a);
 ?>
 --EXPECTF--
-object(CData)#%d (3) {
+object(FFI\CData)#%d (3) {
   [0]=>
   int(0)
   [1]=>
@@ -22,7 +22,7 @@ object(CData)#%d (3) {
   [2]=>
   int(20)
 }
-object(CData)#%d (3) {
+object(FFI\CData)#%d (3) {
   [0]=>
   int(5)
   [1]=>

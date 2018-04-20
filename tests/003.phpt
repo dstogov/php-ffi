@@ -40,22 +40,22 @@ try {
 echo "ok\n";
 ?>
 --EXPECTF--
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["x"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["x"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["x"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["x"]=>
   int(0)
 }
-FFIParserException: incomplete 'struct _e' at line 1
-FFIParserException: incomplete 'struct _f' at line 1
+FFI\ParserException: incomplete 'struct _e' at line 1
+FFI\ParserException: incomplete 'struct _f' at line 1
 ok

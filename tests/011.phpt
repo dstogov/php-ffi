@@ -10,7 +10,7 @@ $a[1] = 255;
 var_dump(FFI::cast("uint16_t[2]", $a));
 ?>
 --EXPECTF--
-object(CData)#%d (2) {
+object(FFI\CData)#%d (2) {
   [0]=>
   int(65535)
   [1]=>

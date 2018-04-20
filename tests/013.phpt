@@ -55,10 +55,10 @@ try {
 int(1)
 int(2)
 int(3)
-FFIParserException: 'void' type is not allowed at line 1
-FFIParserException: 'void' type is not allowed at line 1
-FFIParserException: function returning array is not allowed at line 1
-FFIParserException: array of functions is not allowed at line 1
-FFIParserException: function returning function is not allowed at line 1
-FFIParserException: only the leftmost array can be undimensioned at line 1
+FFI\ParserException: 'void' type is not allowed at line 1
+FFI\ParserException: 'void' type is not allowed at line 1
+FFI\ParserException: function returning array is not allowed at line 1
+FFI\ParserException: array of functions is not allowed at line 1
+FFI\ParserException: function returning function is not allowed at line 1
+FFI\ParserException: only the leftmost array can be undimensioned at line 1
 ok

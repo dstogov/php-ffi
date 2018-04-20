@@ -50,36 +50,36 @@ try {
 echo "ok\n";
 ?>
 --EXPECTF--
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   [0]=>
   int(0)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   [0]=>
   int(0)
 }
-object(CData)#%d (2) {
+object(FFI\CData)#%d (2) {
   [0]=>
   int(0)
   [1]=>
   int(0)
 }
-FFIParserException: incomplete 'enum _e' at line 1
-FFIParserException: incomplete 'enum _f' at line 1
+FFI\ParserException: incomplete 'enum _e' at line 1
+FFI\ParserException: incomplete 'enum _f' at line 1
 ok

@@ -2046,11 +2046,11 @@ ZEND_MINIT_FUNCTION(ffi)
 {
 	zend_class_entry ce;
 
-	INIT_CLASS_ENTRY(ce, "FFIException", NULL);
+	INIT_NS_CLASS_ENTRY(ce, "FFI", "Exception", NULL);
 	zend_ffi_exception_ce = zend_register_internal_class_ex(&ce, zend_ce_error);
 	zend_ffi_exception_ce->ce_flags |= ZEND_ACC_FINAL;
 
-	INIT_CLASS_ENTRY(ce, "FFIParserException", NULL);
+	INIT_NS_CLASS_ENTRY(ce, "FFI", "ParserException", NULL);
 	zend_ffi_parser_exception_ce = zend_register_internal_class_ex(&ce, zend_ce_error);
 	zend_ffi_parser_exception_ce->ce_flags |= ZEND_ACC_FINAL;
 
@@ -2084,7 +2084,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_handlers.get_debug_info       = NULL;
 	zend_ffi_handlers.get_closure          = NULL;
 
-	INIT_CLASS_ENTRY(ce, "CData", NULL);
+	INIT_NS_CLASS_ENTRY(ce, "FFI", "CData", NULL);
 	zend_ffi_cdata_ce = zend_register_internal_class(&ce);
 	zend_ffi_cdata_ce->ce_flags |= ZEND_ACC_FINAL;
 	zend_ffi_cdata_ce->create_object = zend_ffi_cdata_new;

@@ -19,6 +19,6 @@ try {
 ?>
 ok
 --EXPECTF--
-FFIParserException: incomplete 'struct X' at line 1
+FFI\ParserException: incomplete 'struct X' at line 1
 ok
 ok

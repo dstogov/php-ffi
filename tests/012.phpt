@@ -11,4 +11,4 @@ try {
 }
 ?>
 --EXPECTF--
-Exception: Serialization of 'CData' is not allowed
+Exception: Serialization of 'FFI\CData' is not allowed

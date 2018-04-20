@@ -59,11 +59,11 @@ try {
 ?>
 ok
 --EXPECTF--
-FFIException: Attempt to assign read-only field 'y'
-FFIException: Attempt to assign read-only field 'x'
-FFIException: Attempt to assign read-only location
-FFIException: Attempt to assign read-only location
+FFI\Exception: Attempt to assign read-only field 'y'
+FFI\Exception: Attempt to assign read-only field 'x'
+FFI\Exception: Attempt to assign read-only location
+FFI\Exception: Attempt to assign read-only location
 ok
-FFIException: Attempt to assign read-only location
-FFIException: Attempt to assign read-only location
+FFI\Exception: Attempt to assign read-only location
+FFI\Exception: Attempt to assign read-only location
 ok

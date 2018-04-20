@@ -21,21 +21,21 @@ FFI 025: direct work with primitive types
 	unset($x);
 ?>
 --EXPECTF--
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(5)
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   int(7)
 }
 7
 
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   string(1) "a"
 }
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cdata"]=>
   string(1) "b"
 }

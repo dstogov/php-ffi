@@ -55,12 +55,12 @@ try {
 ?>
 ok
 --EXPECT--
-FFIParserException: incomplete 'struct DIR' at line 1
+FFI\ParserException: incomplete 'struct DIR' at line 1
 ok
-FFIParserException: incomplete 'struct DIR' at line 1
+FFI\ParserException: incomplete 'struct DIR' at line 1
 ok
-FFIParserException: incomplete 'struct DIR' at line 1
+FFI\ParserException: incomplete 'struct DIR' at line 1
 ok
-FFIParserException: incomplete 'struct DIR' at line 1
+FFI\ParserException: incomplete 'struct DIR' at line 1
 ok
 ok

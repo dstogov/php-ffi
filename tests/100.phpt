@@ -36,9 +36,9 @@ var_dump(FFI::string($str));
 ?>
 --EXPECTF--
 string(%d) "Zend Engine %s"
-object(CData)#%d (1) {
+object(FFI\CData)#%d (1) {
   ["cptr"]=>
-  object(CData)#%d (0) {
+  object(FFI\CData)#%d (0) {
   }
 }
 Hello World!

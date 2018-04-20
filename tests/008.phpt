@@ -32,5 +32,5 @@ int(3)
 0 => 0
 1 => 10
 2 => 20
-FFIException: Attempt to count() on non C array
-FFIException: Attempt to iterate on non C array
+FFI\Exception: Attempt to count() on non C array
+FFI\Exception: Attempt to iterate on non C array
