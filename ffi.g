@@ -164,6 +164,7 @@ type_qualifier_list(zend_ffi_dcl *dcl):
 type_qualifier(zend_ffi_dcl *dcl):
 		("const"|"__const"|"__const__")
 		{dcl->flags |= ZEND_FFI_DCL_CONST;}
+		{dcl->attr |= ZEND_FFI_ATTR_CONST;}
 	|	("restrict"|"__restict"|"__restrict__")
 		{dcl->flags |= ZEND_FFI_DCL_RESTRICT;}
 	|	("volatile"|"__volatile"|"__volatile__")
@@ -379,7 +380,6 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 	{zend_ffi_dcl dummy = {0, 0, 0, 0, NULL};}
 	{zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};}
 	{HashTable *args = NULL;}
-	{zend_bool variadic = 0;}
 	(	"["
 	    (	"static"
 			type_qualifier_list(&dummy)?
@@ -387,11 +387,15 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 		|	type_qualifier_list(&dummy)
 			(	"static" assignment_expression(&len)
 			|	/* empty */
+				{dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
 			|	"*"
+				{dcl->attr |= ZEND_FFI_ATTR_VLA;}
 			|	assignment_expression(&len)
 			)
 		|	(	/* empty */
+				{dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
 			|	"*"
+				{dcl->attr |= ZEND_FFI_ATTR_VLA;}
 			|	assignment_expression(&len)
 			)
 		)
@@ -407,13 +411,14 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 			(
 				","
 				"..."
-				{variadic = 1;}
+				{dcl->attr |= ZEND_FFI_ATTR_VARIADIC;}
 			)?
 		|	"..."
+			{dcl->attr |= ZEND_FFI_ATTR_VARIADIC;}
 		)?
 		")"
 		array_or_function_declarators(dcl)
-		{zend_ffi_make_func_type(dcl, args, variadic);}
+		{zend_ffi_make_func_type(dcl, args);}
 //	|	"(" (ID ("," ID)*)? ")" // TODO: ANSI function not-implemented ???
 	)?
 ;

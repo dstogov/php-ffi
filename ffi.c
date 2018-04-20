@@ -73,19 +73,16 @@ struct _zend_ffi_type {
 		} enumeration;
 		struct {
 			zend_ffi_type *type;
-			zend_bool      is_const;
 			zend_long      length;
 		} array;
 		struct {
 			zend_ffi_type *type;
-			zend_bool      is_const;
 		} pointer;
 		struct {
 			HashTable      fields;
 		} record;
 		struct {
 			zend_ffi_type *ret_type;
-			zend_bool      variadic;
 			HashTable     *args;
 			ffi_abi        abi;
 		} func;
@@ -106,9 +103,9 @@ typedef enum _zend_ffi_symbol_kind {
 } zend_ffi_symbol_kind;
 
 typedef struct _zend_ffi_symbol {
-	zend_ffi_symbol_kind kind;
-	zend_ffi_type *type;
-	zend_bool is_const;
+	zend_ffi_symbol_kind   kind;
+	zend_bool              is_const;
+	zend_ffi_type         *type;
 	union {
 		void *addr;
 		int64_t value;
@@ -261,7 +258,7 @@ again:
 				if (*(void**)ptr == NULL) {
 					ZVAL_NULL(rv);
 					return SUCCESS;
-				} else if (type->pointer.is_const && ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_CHAR) {
+				} else if ((type->attr & ZEND_FFI_ATTR_CONST) && ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_CHAR) {
 					ZVAL_STRING(rv, *(char**)ptr);
 					return SUCCESS;
 				}
@@ -556,11 +553,11 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 			return &EG(uninitialized_zval);
 		}
 
-		is_const = cdata->is_const | type->array.is_const;
+		is_const = cdata->is_const || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->array.type);
 		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
 	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
-		is_const = cdata->is_const | type->pointer.is_const;
+		is_const = cdata->is_const || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->pointer.type);
 		ptr = (void*)((*(char**)cdata->ptr) + type->size * dim);
 		if (ptr == NULL) {
@@ -594,11 +591,11 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 			return;
 		}
 
-		is_const = cdata->is_const | type->array.is_const;
+		is_const = cdata->is_const || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->array.type);
 		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
 	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
-		is_const = cdata->is_const | type->pointer.is_const;
+		is_const = cdata->is_const || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->pointer.type);
 		ptr = (void*)((*(char**)cdata->ptr) + type->size * dim);
 		if (ptr == NULL) {
@@ -690,7 +687,7 @@ static zval *zend_ffi_cdata_it_get_current_data(zend_object_iterator *it) /* {{{
 	ptr = (void*)((char*)cdata->ptr + type->size * iter->it.index);
 
 	zval_ptr_dtor(&iter->value);
-	if (zend_ffi_cdata_to_zval(NULL, ptr, type, iter->by_ref ? BP_VAR_RW : BP_VAR_R, &iter->value, cdata->is_const | type->array.is_const) != SUCCESS) {
+	if (zend_ffi_cdata_to_zval(NULL, ptr, type, iter->by_ref ? BP_VAR_RW : BP_VAR_R, &iter->value, cdata->is_const || (type->attr & ZEND_FFI_ATTR_CONST)) != SUCCESS) {
 		return &EG(uninitialized_zval);
 	}
 	return &iter->value;
@@ -1300,7 +1297,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 
 	ZEND_ASSERT(type->kind == ZEND_FFI_TYPE_FUNC);
 	arg_count = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
-	if (type->func.variadic) {
+	if (type->attr & ZEND_FFI_ATTR_VARIADIC) {
 		if (arg_count > EX_NUM_ARGS()) {
 			zend_throw_error(zend_ffi_exception_ce, "Incorrect number of arguments for C function '%s'", ZSTR_VAL(EX(func)->internal_function.function_name));
 			return;
@@ -1534,7 +1531,7 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 static int zend_ffi_validate_incomplete_type(zend_ffi_type *type) /* {{{ */
 {
 	if (!FFI_G(error)) {
-		if ((type->attr & ZEND_FFI_ATTR_INCOMPLETE)) {
+		if (type->attr & ZEND_FFI_ATTR_INCOMPLETE_TAG) {
 			if (FFI_G(tags)) {
 				zend_string *key;
 				zend_ffi_tag *tag;
@@ -1565,8 +1562,12 @@ static int zend_ffi_validate_incomplete_type(zend_ffi_type *type) /* {{{ */
 			}
 			zend_spprintf(&FFI_G(error), 0, "incomplete type at line %d", FFI_G(line));
 			return FAILURE;
-		}
 		// TODO: incomplete and variable length arrays???
+		//} else if (type->attr & ZEND_FFI_ATTR_INCOMPLETE_ARRAY) {
+		//} else if (type->attr & ZEND_FFI_ATTR_INCOMPLETE_STRUCT) {
+		//} else if (type->attr & ZEND_FFI_ATTR_VLA) {
+		//} else if (type->attr & ZEND_FFI_ATTR_VLS) {
+		}
 	}
 	return SUCCESS;
 }
@@ -1741,7 +1742,7 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	cdata->ptr = ptr;
 	cdata->user = 1;
 	cdata->owned_ptr = owned_ptr;
-	cdata->is_const = (dcl.flags & ZEND_FFI_DCL_CONST) != 0;
+	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
 	RETURN_OBJ(&cdata->std);
 }
@@ -1855,7 +1856,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
 	cdata->user = 1;
 	cdata->owned_ptr = 0;
-	cdata->is_const = (dcl.flags & ZEND_FFI_DCL_CONST) != 0;
+	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
 	RETURN_OBJ(&cdata->std);
 }
@@ -2387,7 +2388,7 @@ void zend_ffi_resolve_typedef(const char *name, size_t name_len, zend_ffi_dcl *d
 			if (sym && sym->kind == ZEND_FFI_SYM_TYPE) {
 				dcl->type = ZEND_FFI_TYPE(sym->type);;
 				if (sym->is_const) {
-					dcl->flags |= ZEND_FFI_DCL_CONST;
+					dcl->attr |= ZEND_FFI_ATTR_CONST;
 				}
 				return;
 			}
@@ -2633,7 +2634,7 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 			struct_type->size += field_type->size;
 		}
 		field->type = field_dcl->type;
-		field->is_const = (field_dcl->flags & ZEND_FFI_DCL_CONST) != 0;
+		field->is_const = (field_dcl->attr & ZEND_FFI_ATTR_CONST) != 0;
 		field_dcl->type = field_type; /* reset "owned" flag */
 
 		if (!zend_hash_str_add_ptr(&struct_type->record.fields, name, name_len, field)) {
@@ -2758,7 +2759,6 @@ void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl) /* {{{ */
 	type->align = _Alignof(void*);
 	zend_ffi_finalize_type(dcl);
 	type->pointer.type = dcl->type;
-	type->pointer.is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	dcl->flags &= ~ZEND_FFI_DCL_TYPE_QUALIFIERS;
 	dcl->attr &= ~ZEND_FFI_POINTER_ATTRS;
@@ -2840,7 +2840,6 @@ void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len) /* {{{ */
 	type->align = element_type->align;
 	type->array.type = dcl->type;
 	type->array.length = length;
-	type->array.is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 	dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	dcl->flags &= ~ZEND_FFI_DCL_TYPE_QUALIFIERS;
 	dcl->attr &= ~ZEND_FFI_ARRAY_ATTRS;
@@ -2865,7 +2864,7 @@ static int zend_ffi_validate_func_ret_type(zend_ffi_type *type) /* {{{ */
 }
 /* }}} */
 
-void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool variadic) /* {{{ */
+void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 {
 	zend_ffi_type *type;
 	zend_ffi_type *ret_type;
@@ -2915,7 +2914,6 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 	type->size = sizeof(void*);
 	type->align = 1;
 	type->func.ret_type = dcl->type;
-	type->func.variadic = variadic;
 	switch (dcl->abi) {
 		case ZEND_FFI_ABI_DEFAULT:
 		case ZEND_FFI_ABI_CDECL:
@@ -2985,7 +2983,6 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 				new_type->size = sizeof(void*);
 				new_type->align = _Alignof(void*);
 				new_type->pointer.type = ZEND_FFI_TYPE(type->array.type);
-				new_type->pointer.is_const = new_type->array.is_const;
 				arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
 			}
 		} else if (type->kind == ZEND_FFI_TYPE_FUNC) {
@@ -2995,7 +2992,6 @@ void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_
 			new_type->size = sizeof(void*);
 			new_type->align = _Alignof(void*);
 			new_type->pointer.type = arg_dcl->type;
-			new_type->pointer.is_const = 0;
 			arg_dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
 		}
 		zend_ffi_validate_incomplete_type(type);
@@ -3022,7 +3018,7 @@ void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl) /* {
 				sym = emalloc(sizeof(zend_ffi_symbol));
 				sym->kind = ZEND_FFI_SYM_TYPE;
 				sym->type = dcl->type;
-				sym->is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
+				sym->is_const = (dcl->attr & ZEND_FFI_ATTR_CONST) != 0;
 				dcl->type = ZEND_FFI_TYPE(dcl->type); /* reset "owned" flag */
 				zend_hash_str_add_new_ptr(FFI_G(symbols), name, name_len, sym);
 			} else {
@@ -3038,7 +3034,7 @@ void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl) /* {
 					sym = emalloc(sizeof(zend_ffi_symbol));
 					sym->kind = (type->kind == ZEND_FFI_TYPE_FUNC) ? ZEND_FFI_SYM_FUNC : ZEND_FFI_SYM_VAR;
 					sym->type = dcl->type;
-					sym->is_const = (dcl->flags & ZEND_FFI_DCL_CONST) != 0;
+					sym->is_const = (dcl->attr & ZEND_FFI_ATTR_CONST) != 0;
 					dcl->type = type; /* reset "owned" flag */
 					zend_hash_str_add_new_ptr(FFI_G(symbols), name, name_len, sym);
 				} else {
@@ -3070,7 +3066,7 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 				if (tag->kind != ZEND_FFI_TAG_STRUCT) {
 					zend_spprintf(&FFI_G(error), 0, "'%.*s' defined as wrong kind of tag at line %d", name_len, name, FFI_G(line));
 					return;
-				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE)) {
+				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE_TAG)) {
 					zend_spprintf(&FFI_G(error), 0, "redefinition of 'struct %.*s' at line %d", name_len, name, FFI_G(line));
 					return;
 				}
@@ -3078,7 +3074,7 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 				if (tag->kind != ZEND_FFI_TAG_UNION) {
 					zend_spprintf(&FFI_G(error), 0, "'%.*s' defined as wrong kind of tag at line %d", name_len, name, FFI_G(line));
 					return;
-				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE)) {
+				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE_TAG)) {
 					zend_spprintf(&FFI_G(error), 0, "redefinition of 'union %.*s' at line %d", name_len, name, FFI_G(line));
 					return;
 				}
@@ -3086,7 +3082,7 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 				if (tag->kind != ZEND_FFI_TAG_ENUM) {
 					zend_spprintf(&FFI_G(error), 0, "'%.*s' defined as wrong kind of tag at line %d", name_len, name, FFI_G(line));
 					return;
-				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE)) {
+				} else if (!incomplete && !(type->attr & ZEND_FFI_ATTR_INCOMPLETE_TAG)) {
 					zend_spprintf(&FFI_G(error), 0, "redefinition of 'enum %.*s' at line %d", name_len, name, FFI_G(line));
 					return;
 				}
@@ -3096,7 +3092,7 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 			}
 			dcl->type = type;
 			if (!incomplete) {
-				type->attr &= ~ZEND_FFI_ATTR_INCOMPLETE;
+				type->attr &= ~ZEND_FFI_ATTR_INCOMPLETE_TAG;
 			}
 		} else {
 			zend_ffi_tag *tag = emalloc(sizeof(zend_ffi_tag));
@@ -3116,7 +3112,7 @@ void zend_ffi_declare_tag(const char *name, size_t name_len, zend_ffi_dcl *dcl, 
 			tag->type = ZEND_FFI_TYPE_MAKE_OWNED(dcl->type);
 			dcl->type = ZEND_FFI_TYPE(dcl->type);
 			if (incomplete) {
-				dcl->type->attr |= ZEND_FFI_ATTR_INCOMPLETE;
+				dcl->type->attr |= ZEND_FFI_ATTR_INCOMPLETE_TAG;
 			}
 			zend_hash_str_add_new_ptr(FFI_G(tags), name, name_len, tag);
 		}

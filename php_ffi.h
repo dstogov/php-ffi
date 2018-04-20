@@ -106,23 +106,33 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 #define	ZEND_FFI_ABI_MS             7  // FFI_MS_CDECL
 #define	ZEND_FFI_ABI_SYSV           8  // FFI_SYSV
 
-#define	ZEND_FFI_ATTR_UNION          (1<<0)
-#define	ZEND_FFI_ATTR_PACKED         (1<<1)
-#define	ZEND_FFI_ATTR_MS_STRUCT      (1<<2)
-#define	ZEND_FFI_ATTR_GCC_STRUCT     (1<<3)
-
-#define ZEND_FFI_ATTR_INCOMPLETE     (1<<7)
+#define ZEND_FFI_ATTR_INCOMPLETE_TAG    (1<<0)
+#define ZEND_FFI_ATTR_CONST             (1<<1)
+#define ZEND_FFI_ATTR_VARIADIC          (1<<2)
+#define ZEND_FFI_ATTR_INCOMPLETE_ARRAY  (1<<3)
+#define ZEND_FFI_ATTR_VLA               (1<<4)
+#define	ZEND_FFI_ATTR_UNION             (1<<5)
+#define	ZEND_FFI_ATTR_PACKED            (1<<6)
+#define ZEND_FFI_ATTR_INCOMPLETE_STRUCT (1<<7)
+#define ZEND_FFI_ATTR_VLS               (1<<8)
+#define	ZEND_FFI_ATTR_MS_STRUCT         (1<<9)
+#define	ZEND_FFI_ATTR_GCC_STRUCT        (1<<10)
 
 #define ZEND_FFI_STRUCT_ATTRS \
 	(ZEND_FFI_ATTR_UNION|ZEND_FFI_ATTR_PACKED|ZEND_FFI_ATTR_MS_STRUCT \
-	|ZEND_FFI_ATTR_GCC_STRUCT)
+	|ZEND_FFI_ATTR_GCC_STRUCT|ZEND_FFI_ATTR_VLS|ZEND_FFI_ATTR_INCOMPLETE_STRUCT)
 
 #define ZEND_FFI_ENUM_ATTRS \
 	(ZEND_FFI_ATTR_PACKED)
 
-#define ZEND_FFI_ARRAY_ATTRS         0
-#define ZEND_FFI_POINTER_ATTRS       0
-#define ZEND_FFI_FUNC_ATTRS          0
+#define ZEND_FFI_ARRAY_ATTRS \
+	(ZEND_FFI_ATTR_CONST|ZEND_FFI_ATTR_VLA|ZEND_FFI_ATTR_INCOMPLETE_ARRAY)
+
+#define ZEND_FFI_FUNC_ATTRS \
+	(ZEND_FFI_ATTR_VARIADIC)
+
+#define ZEND_FFI_POINTER_ATTRS \
+	(ZEND_FFI_ATTR_CONST)
 
 typedef struct _zend_ffi_dcl {
 	uint32_t       flags;
@@ -178,7 +188,7 @@ void zend_ffi_skip_bit_field(zend_ffi_dcl *struct_dcl, zend_ffi_val *bits);
 void zend_ffi_adjust_struct_size(zend_ffi_dcl *dcl);
 void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl);
 void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len);
-void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool variadic);
+void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args);
 void zend_ffi_add_arg(HashTable **args, const char *name, size_t name_len, zend_ffi_dcl *arg_dcl);
 void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len);

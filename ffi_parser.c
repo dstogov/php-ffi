@@ -1853,6 +1853,7 @@ static int parse_type_qualifier(int sym, zend_ffi_dcl *dcl) {
 			yy_error_sym("unexpected '%s'", sym);
 		}
 		dcl->flags |= ZEND_FFI_DCL_CONST;
+		dcl->attr |= ZEND_FFI_ATTR_CONST;
 	} else if (sym == YY_RESTRICT || sym == YY___RESTICT || sym == YY___RESTRICT__) {
 		if (sym == YY_RESTRICT) {
 			sym = get_sym();
@@ -2310,7 +2311,6 @@ static int parse_array_or_function_declarators(int sym, zend_ffi_dcl *dcl) {
 	zend_ffi_dcl dummy = {0, 0, 0, 0, NULL};
 	zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};
 	HashTable *args = NULL;
-	zend_bool variadic = 0;
 	if (sym == YY__LBRACK || sym == YY__LPAREN) {
 		if (sym == YY__LBRACK) {
 			sym = get_sym();
@@ -2397,8 +2397,10 @@ _yy_state_250:
 					sym = get_sym();
 					sym = parse_assignment_expression(sym, &len);
 				} else if (alt250 == 257) {
+					dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
 				} else if (alt250 == 253) {
 					sym = get_sym();
+					dcl->attr |= ZEND_FFI_ATTR_VLA;
 				} else if (alt250 == 254) {
 					sym = parse_assignment_expression(sym, &len);
 				} else {
@@ -2406,8 +2408,10 @@ _yy_state_250:
 				}
 			} else if (alt246 == 257 || alt246 == 255 || alt246 == 256) {
 				if (alt246 == 257) {
+					dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
 				} else if (alt246 == 255) {
 					sym = get_sym();
+					dcl->attr |= ZEND_FFI_ATTR_VLA;
 				} else if (alt246 == 256) {
 					sym = parse_assignment_expression(sym, &len);
 				} else {
@@ -2468,10 +2472,11 @@ _yy_state_260:
 							yy_error_sym("'...' expected, got '%s'", sym);
 						}
 						sym = get_sym();
-						variadic = 1;
+						dcl->attr |= ZEND_FFI_ATTR_VARIADIC;
 					}
 				} else if (sym == YY__POINT_POINT_POINT) {
 					sym = get_sym();
+					dcl->attr |= ZEND_FFI_ATTR_VARIADIC;
 				} else {
 					yy_error_sym("unexpected '%s'", sym);
 				}
@@ -2481,7 +2486,7 @@ _yy_state_260:
 			}
 			sym = get_sym();
 			sym = parse_array_or_function_declarators(sym, dcl);
-			zend_ffi_make_func_type(dcl, args, variadic);
+			zend_ffi_make_func_type(dcl, args);
 		} else {
 			yy_error_sym("unexpected '%s'", sym);
 		}
