@@ -6,7 +6,7 @@ FFI PHP extension provides a simple way to call native functions, access native 
 <?php
 $libc = new FFI("
     int printf(const char *format, ...);
-    char * getenv(const char *);
+    const char * getenv(const char *);
     unsigned int time(unsigned int *);
 
     typedef unsigned int time_t;
@@ -42,7 +42,7 @@ string(135) "/usr/lib64/qt-3.3/bin:/usr/lib64/ccache:/usr/local/bin:/usr/bin:/bi
 int(1523617815)
 int(1523617815)
 int(977765)
-object(CData)#3 (2) {
+object(FFI\CData)#3 (2) {
   ["tz_minuteswest"]=>
   int(-180)
   ["tz_dsttime"]=>
@@ -65,16 +65,16 @@ var_dump($p);
 ```
 
 ```
-object(CData)#1 (2) {
+object(FFI\CData)#1 (2) {
   [0]=>
-  object(CData)#2 (2) {
+  object(FFI\CData)#2 (2) {
     ["x"]=>
     int(5)
     ["y"]=>
     int(0)
   }
   [1]=>
-  object(CData)#3 (2) {
+  object(FFI\CData)#3 (2) {
     ["x"]=>
     int(0)
     ["y"]=>

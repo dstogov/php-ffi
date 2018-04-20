@@ -2,7 +2,7 @@
 $ffi = new FFI("
 
     int printf(const char *format, ...);
-    char * getenv(const char *);
+    const char * getenv(const char *);
     unsigned int time(unsigned int *);
 
     typedef unsigned int time_t;
