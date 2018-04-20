@@ -149,6 +149,7 @@ static zend_class_entry *zend_ffi_cdata_ce;
 
 static zend_object_handlers zend_ffi_handlers;
 static zend_object_handlers zend_ffi_cdata_handlers;
+static zend_object_handlers zend_ffi_cdata_value_handlers;
 
 static zend_internal_function zend_ffi_new_fn;
 static zend_internal_function zend_ffi_cast_fn;
@@ -278,6 +279,9 @@ again:
 
 	if (!cdata) {
 		cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+		if (type->kind < ZEND_FFI_TYPE_POINTER) {
+			cdata->std.handlers = &zend_ffi_cdata_value_handlers;
+		}
 		cdata->type = type;
 		cdata->ptr = ptr;
 		cdata->is_const = is_const;
@@ -414,6 +418,34 @@ static ZEND_COLD zend_function *zend_ffi_cdata_get_constructor(zend_object *obje
 {
 	zend_throw_error(zend_ffi_exception_ce, "Instantiation of 'CData' is not allowed");
 	return NULL;
+}
+/* }}} */
+
+static zval* zend_ffi_cdata_get(zval *object, zval *rv) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+
+	if (zend_ffi_cdata_to_zval(cdata, cdata->ptr, type, BP_VAR_R, rv, cdata->is_const) != SUCCESS) {
+		return &EG(uninitialized_zval);
+	}
+
+	return rv;
+}
+/* }}} */
+
+static void zend_ffi_cdata_set(zval *object, zval *value) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
+	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
+
+	zend_ffi_zval_to_cdata(cdata->ptr, type, value);
+}
+/* }}} */
+
+static int zend_ffi_cdata_cast_object(zval *readobj, zval *writeobj, int type) /* {{{ */
+{
+	return FAILURE;
 }
 /* }}} */
 
@@ -1703,6 +1735,9 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	memset(ptr, 0, type->size);
 
 	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+	if (type->kind < ZEND_FFI_TYPE_POINTER) {
+		cdata->std.handlers = &zend_ffi_cdata_value_handlers;
+	}
 	cdata->type = dcl.type;
 	cdata->ptr = ptr;
 	cdata->user = 1;
@@ -1814,6 +1849,9 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 	// TODO: check boundary ???
 	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+	if (type->kind < ZEND_FFI_TYPE_POINTER) {
+		cdata->std.handlers = &zend_ffi_cdata_value_handlers;
+	}
 	cdata->type = dcl.type;
 	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
 	cdata->user = 1;
@@ -2070,10 +2108,32 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.unset_dimension      = NULL;
 	zend_ffi_cdata_handlers.get_method           = NULL;
 	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
-	zend_ffi_cdata_handlers.cast_object          = NULL;
+	zend_ffi_cdata_handlers.cast_object          = zend_ffi_cdata_cast_object;
 	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_handlers.get_closure          = zend_ffi_cdata_get_closure;
+
+	memcpy(&zend_ffi_cdata_value_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	zend_ffi_cdata_value_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
+	zend_ffi_cdata_value_handlers.free_obj             = zend_ffi_cdata_free_obj;
+	zend_ffi_cdata_value_handlers.clone_obj            = NULL;
+	zend_ffi_cdata_value_handlers.read_property        = NULL;
+	zend_ffi_cdata_value_handlers.write_property       = NULL;
+	zend_ffi_cdata_value_handlers.read_dimension       = NULL;
+	zend_ffi_cdata_value_handlers.write_dimension      = NULL;
+	zend_ffi_cdata_value_handlers.get_property_ptr_ptr = NULL;
+	zend_ffi_cdata_value_handlers.get                  = zend_ffi_cdata_get;
+	zend_ffi_cdata_value_handlers.set                  = zend_ffi_cdata_set;
+	zend_ffi_cdata_value_handlers.has_property         = NULL;
+	zend_ffi_cdata_value_handlers.unset_property       = NULL;
+	zend_ffi_cdata_value_handlers.has_dimension        = NULL;
+	zend_ffi_cdata_value_handlers.unset_dimension      = NULL;
+	zend_ffi_cdata_value_handlers.get_method           = NULL;
+	zend_ffi_cdata_value_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
+	zend_ffi_cdata_value_handlers.cast_object          = NULL;
+	zend_ffi_cdata_value_handlers.count_elements       = NULL;
+	zend_ffi_cdata_value_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
+	zend_ffi_cdata_value_handlers.get_closure          = NULL;
 
 	return SUCCESS;
 }
@@ -2851,7 +2911,6 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args, zend_bool varia
 	type->align = 1;
 	type->func.ret_type = dcl->type;
 	type->func.variadic = variadic;
-	// TODO: verify ABI ???
 	switch (dcl->abi) {
 		case ZEND_FFI_ABI_DEFAULT:
 		case ZEND_FFI_ABI_CDECL:

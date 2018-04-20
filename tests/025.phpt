@@ -1,0 +1,42 @@
+--TEST--
+FFI 025: direct work with primitive types
+--SKIPIF--
+<?php require_once('skipif.inc'); ?>
+--FILE--
+<?php
+	$x = FFI::new("int");
+	$x = 5;
+	var_dump($x);
+	$x += 2;
+	var_dump($x);
+	echo "$x\n\n";
+	unset($x);
+
+	$x = FFI::new("char");
+	$x = 'a';
+	var_dump($x);
+	$x++;
+	var_dump($x);
+	echo "$x\n\n";
+	unset($x);
+?>
+--EXPECTF--
+object(CData)#%d (1) {
+  ["cdata"]=>
+  int(5)
+}
+object(CData)#%d (1) {
+  ["cdata"]=>
+  int(7)
+}
+7
+
+object(CData)#%d (1) {
+  ["cdata"]=>
+  string(1) "a"
+}
+object(CData)#%d (1) {
+  ["cdata"]=>
+  string(1) "b"
+}
+b
