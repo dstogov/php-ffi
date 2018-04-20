@@ -2311,6 +2311,7 @@ static int parse_array_or_function_declarators(int sym, zend_ffi_dcl *dcl) {
 	zend_ffi_dcl dummy = {0, 0, 0, 0, NULL};
 	zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};
 	HashTable *args = NULL;
+	uint32_t attr = 0;
 	if (sym == YY__LBRACK || sym == YY__LPAREN) {
 		if (sym == YY__LBRACK) {
 			sym = get_sym();
@@ -2397,10 +2398,10 @@ _yy_state_250:
 					sym = get_sym();
 					sym = parse_assignment_expression(sym, &len);
 				} else if (alt250 == 257) {
-					dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
+					attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
 				} else if (alt250 == 253) {
 					sym = get_sym();
-					dcl->attr |= ZEND_FFI_ATTR_VLA;
+					attr |= ZEND_FFI_ATTR_VLA;
 				} else if (alt250 == 254) {
 					sym = parse_assignment_expression(sym, &len);
 				} else {
@@ -2408,10 +2409,10 @@ _yy_state_250:
 				}
 			} else if (alt246 == 257 || alt246 == 255 || alt246 == 256) {
 				if (alt246 == 257) {
-					dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
+					attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;
 				} else if (alt246 == 255) {
 					sym = get_sym();
-					dcl->attr |= ZEND_FFI_ATTR_VLA;
+					attr |= ZEND_FFI_ATTR_VLA;
 				} else if (alt246 == 256) {
 					sym = parse_assignment_expression(sym, &len);
 				} else {
@@ -2425,6 +2426,7 @@ _yy_state_250:
 			}
 			sym = get_sym();
 			sym = parse_array_or_function_declarators(sym, dcl);
+			dcl->attr |= attr;
 			zend_ffi_make_array_type(dcl, &len);
 		} else if (sym == YY__LPAREN) {
 			sym = get_sym();
@@ -2472,11 +2474,11 @@ _yy_state_260:
 							yy_error_sym("'...' expected, got '%s'", sym);
 						}
 						sym = get_sym();
-						dcl->attr |= ZEND_FFI_ATTR_VARIADIC;
+						attr |= ZEND_FFI_ATTR_VARIADIC;
 					}
 				} else if (sym == YY__POINT_POINT_POINT) {
 					sym = get_sym();
-					dcl->attr |= ZEND_FFI_ATTR_VARIADIC;
+					attr |= ZEND_FFI_ATTR_VARIADIC;
 				} else {
 					yy_error_sym("unexpected '%s'", sym);
 				}
@@ -2486,6 +2488,7 @@ _yy_state_260:
 			}
 			sym = get_sym();
 			sym = parse_array_or_function_declarators(sym, dcl);
+			dcl->attr |= attr;
 			zend_ffi_make_func_type(dcl, args);
 		} else {
 			yy_error_sym("unexpected '%s'", sym);
@@ -2497,10 +2500,13 @@ _yy_state_260:
 static int parse_parameter_declaration(int sym, HashTable **args) {
 	const char *name = NULL;
 	size_t name_len = 0;
+	zend_bool old_allow_vla = FFI_G(allow_vla);
+	FFI_G(allow_vla) = 1;
 	zend_ffi_dcl param_dcl = {0, 0, 0, 0, NULL};
 	sym = parse_specifier_qualifier_list(sym, &param_dcl);
 	sym = parse_abstract_declarator(sym, &param_dcl, &name, &name_len);
 	zend_ffi_add_arg(args, name, name_len, &param_dcl);
+	FFI_G(allow_vla) = old_allow_vla;
 	return sym;
 }
 
@@ -3225,6 +3231,7 @@ static void parse(void) {
 
 int zend_ffi_parse_decl(zend_string *str) {
 	FFI_G(error) = NULL;
+	FFI_G(allow_vla) = 0;
 	yy_buf = (unsigned char*)ZSTR_VAL(str);
 	yy_end = yy_buf + ZSTR_LEN(str);
 	parse();
@@ -3235,6 +3242,7 @@ int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl) {
 	int sym;
 
 	FFI_G(error) = NULL;
+	FFI_G(allow_vla) = 0;
 	yy_pos = yy_text = yy_buf = (unsigned char*)ZSTR_VAL(str);
 	yy_end = yy_buf + ZSTR_LEN(str);
 	yy_line = 1;

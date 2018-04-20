@@ -380,6 +380,7 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 	{zend_ffi_dcl dummy = {0, 0, 0, 0, NULL};}
 	{zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};}
 	{HashTable *args = NULL;}
+	{uint32_t attr = 0;}
 	(	"["
 	    (	"static"
 			type_qualifier_list(&dummy)?
@@ -387,20 +388,21 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 		|	type_qualifier_list(&dummy)
 			(	"static" assignment_expression(&len)
 			|	/* empty */
-				{dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
+				{attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
 			|	"*"
-				{dcl->attr |= ZEND_FFI_ATTR_VLA;}
+				{attr |= ZEND_FFI_ATTR_VLA;}
 			|	assignment_expression(&len)
 			)
 		|	(	/* empty */
-				{dcl->attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
+				{attr |= ZEND_FFI_ATTR_INCOMPLETE_ARRAY;}
 			|	"*"
-				{dcl->attr |= ZEND_FFI_ATTR_VLA;}
+				{attr |= ZEND_FFI_ATTR_VLA;}
 			|	assignment_expression(&len)
 			)
 		)
 		"]"
 		array_or_function_declarators(dcl)
+		{dcl->attr |= attr;}
 		{zend_ffi_make_array_type(dcl, &len);}
 	|	"("
 		(
@@ -411,13 +413,14 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 			(
 				","
 				"..."
-				{dcl->attr |= ZEND_FFI_ATTR_VARIADIC;}
+				{attr |= ZEND_FFI_ATTR_VARIADIC;}
 			)?
 		|	"..."
-			{dcl->attr |= ZEND_FFI_ATTR_VARIADIC;}
+			{attr |= ZEND_FFI_ATTR_VARIADIC;}
 		)?
 		")"
 		array_or_function_declarators(dcl)
+		{dcl->attr |= attr;}
 		{zend_ffi_make_func_type(dcl, args);}
 //	|	"(" (ID ("," ID)*)? ")" // TODO: ANSI function not-implemented ???
 	)?
@@ -426,11 +429,14 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 parameter_declaration(HashTable **args):
 	{const char *name = NULL;}
 	{size_t name_len = 0;}
+	{zend_bool old_allow_vla = FFI_G(allow_vla);}
+	{FFI_G(allow_vla) = 1;}
 	{zend_ffi_dcl param_dcl = {0, 0, 0, 0, NULL};}
 	specifier_qualifier_list(&param_dcl)
 	abstract_declarator(&param_dcl, &name, &name_len)
 	/*attributes(&param_dcl)?*/
 	{zend_ffi_add_arg(args, name, name_len, &param_dcl);}
+	{FFI_G(allow_vla) = old_allow_vla;}
 ;
 
 type_name(zend_ffi_dcl *dcl):
@@ -780,6 +786,7 @@ SKIP: ( EOL | WS | ONE_LINE_COMMENT | COMMENT )*;
 %%
 int zend_ffi_parse_decl(zend_string *str) {
 	FFI_G(error) = NULL;
+	FFI_G(allow_vla) = 0;
 	yy_buf = (unsigned char*)ZSTR_VAL(str);
 	yy_end = yy_buf + ZSTR_LEN(str);
 	parse();
@@ -790,6 +797,7 @@ int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl) {
 	int sym;
 
 	FFI_G(error) = NULL;
+	FFI_G(allow_vla) = 0;
 	yy_pos = yy_text = yy_buf = (unsigned char*)ZSTR_VAL(str);
 	yy_end = yy_buf + ZSTR_LEN(str);
 	yy_line = 1;

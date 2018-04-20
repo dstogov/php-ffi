@@ -100,8 +100,8 @@ $ffi = new FFI(<<<EOF
 	typedef char type62[static 10];
 	typedef char type63[static const volatile 10];
 	typedef char type64[const volatile static 10];
-	typedef char type65[*];
-	typedef char type66[const volatile *];
+	typedef char type65[];
+	typedef char type66[const volatile];
 	typedef char type67[10][10];
 
 	/* functions */
