@@ -1690,6 +1690,8 @@ static int parse_type_qualifier(int sym, zend_ffi_dcl *dcl) {
 	} else if (sym == YY__ATOMIC) {
 		sym = get_sym();
 		dcl->flags |= ZEND_FFI_DCL_ATOMIC;
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -1774,6 +1776,8 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 			dcl->flags |= ZEND_FFI_DCL_TYPEDEF_NAME;
 			zend_ffi_resolve_typedef(name, name_len, dcl);
 			break;
+		default:
+			yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -1825,6 +1829,8 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 			sym = parse_attributes(sym, dcl);
 		}
 		zend_ffi_adjust_struct_size(dcl);
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -1866,11 +1872,15 @@ static int parse_struct_declarator(int sym, zend_ffi_dcl *struct_dcl, zend_ffi_d
 				sym = parse_attributes(sym, field_dcl);
 			}
 			zend_ffi_add_field(struct_dcl, name, name_len, field_dcl);
+		} else {
+			yy_error_sym("unexpected '%s'", sym);
 		}
 	} else if (sym == YY__COLON) {
 		sym = get_sym();
 		sym = parse_constant_expression(sym, &bits);
 		zend_ffi_skip_bit_field(struct_dcl, &bits);
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -1899,8 +1909,10 @@ static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 			if (sym == YY___ATTRIBUTE__) {
 				sym = parse_attributes(sym, dcl);
 			}
-		} else {
+		} else if (YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY__NORETURN,YY___CDECL,YY___STDCALL,YY___FASTCALL,YY___THISCALL,YY__ALIGNAS,YY___ATTRIBUTE__,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY__STAR,YY__LPAREN,YY__SEMICOLON,YY__COLON,YY__LBRACK,YY__COMMA,YY__RPAREN,YY_EOF), "\377\377\377\377\263\011\000\000\200\000\000")) {
 			zend_ffi_declare_tag(name, name_len, dcl, 1);
+		} else {
+			yy_error_sym("unexpected '%s'", sym);
 		}
 	} else if (sym == YY__LBRACE) {
 		sym = get_sym();
@@ -1913,6 +1925,8 @@ static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 		if (sym == YY___ATTRIBUTE__) {
 			sym = parse_attributes(sym, dcl);
 		}
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -2225,6 +2239,8 @@ _yy_state_253:
 			sym = get_sym();
 			sym = parse_array_or_function_declarators(sym, dcl);
 			zend_ffi_make_func_type(dcl, args, variadic);
+		} else {
+			yy_error_sym("unexpected '%s'", sym);
 		}
 	}
 	return sym;
@@ -2302,6 +2318,8 @@ static int parse_attrib(int sym, zend_ffi_dcl *dcl) {
 				yy_error_sym("')' expected, got '%s'", sym);
 			}
 			sym = get_sym();
+		} else {
+			yy_error_sym("unexpected '%s'", sym);
 		}
 	}
 	return sym;
@@ -2371,6 +2389,8 @@ _yy_state_314:
 			yy_error_sym("'}' expected, got '%s'", sym);
 		}
 		sym = get_sym();
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
@@ -2752,6 +2772,8 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 				}
 				sym = get_sym();
 				zend_ffi_expr_sizeof_type(val, &dcl);
+			} else {
+				yy_error_sym("unexpected '%s'", sym);
 			}
 			break;
 		case YY__ALIGNOF:
@@ -2780,8 +2802,12 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 				}
 				sym = get_sym();
 				zend_ffi_expr_alignof_type(val, &dcl);
+			} else {
+				yy_error_sym("unexpected '%s'", sym);
 			}
 			break;
+		default:
+			yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }

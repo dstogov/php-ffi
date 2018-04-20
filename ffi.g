@@ -17,6 +17,7 @@
 */
 
 %start          declarations
+%sub-start      type_name
 %case-sensetive true
 %global-vars    false
 %output         "ffi_parser.c"
