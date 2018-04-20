@@ -264,17 +264,20 @@ struct_contents(zend_ffi_dcl *dcl):
 struct_declaration(zend_ffi_dcl *struct_dcl):
 	{zend_ffi_dcl common_field_dcl = {0, 0, 0, 0, NULL};}
 	specifier_qualifier_list(&common_field_dcl)
-	struct_declarator(struct_dcl, &common_field_dcl)
-	(	","
-		{zend_ffi_dcl field_dcl = common_field_dcl;}
-		attributes(&field_dcl)?
-		struct_declarator(struct_dcl, &field_dcl)
-	)*
+	(	/* empty */
+		{zend_ffi_add_anonymous_field(struct_dcl, &common_field_dcl);}
+	|	struct_declarator(struct_dcl, &common_field_dcl)
+		(	","
+			{zend_ffi_dcl field_dcl = common_field_dcl;}
+			attributes(&field_dcl)?
+			struct_declarator(struct_dcl, &field_dcl)
+		)*
+	)
 ;
 
 struct_declarator(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl):
-	{const char *name;}
-	{size_t name_len;}
+	{const char *name = NULL;}
+	{size_t name_len = 0;}
 	{zend_ffi_val bits;}
 	(	declarator(field_dcl, &name, &name_len)
 		(	":"

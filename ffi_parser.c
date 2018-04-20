@@ -1879,21 +1879,27 @@ _yy_state_257:
 static int parse_struct_declaration(int sym, zend_ffi_dcl *struct_dcl) {
 	zend_ffi_dcl common_field_dcl = {0, 0, 0, 0, NULL};
 	sym = parse_specifier_qualifier_list(sym, &common_field_dcl);
-	sym = parse_struct_declarator(sym, struct_dcl, &common_field_dcl);
-	while (sym == YY__COMMA) {
-		sym = get_sym();
-		zend_ffi_dcl field_dcl = common_field_dcl;
-		if (sym == YY___ATTRIBUTE__) {
-			sym = parse_attributes(sym, &field_dcl);
+	if (sym == YY__SEMICOLON || sym == YY__RBRACE) {
+		zend_ffi_add_anonymous_field(struct_dcl, &common_field_dcl);
+	} else if (sym == YY__STAR || sym == YY_ID || sym == YY__LPAREN || sym == YY__COLON) {
+		sym = parse_struct_declarator(sym, struct_dcl, &common_field_dcl);
+		while (sym == YY__COMMA) {
+			sym = get_sym();
+			zend_ffi_dcl field_dcl = common_field_dcl;
+			if (sym == YY___ATTRIBUTE__) {
+				sym = parse_attributes(sym, &field_dcl);
+			}
+			sym = parse_struct_declarator(sym, struct_dcl, &field_dcl);
 		}
-		sym = parse_struct_declarator(sym, struct_dcl, &field_dcl);
+	} else {
+		yy_error_sym("unexpected '%s'", sym);
 	}
 	return sym;
 }
 
 static int parse_struct_declarator(int sym, zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl) {
-	const char *name;
-	size_t name_len;
+	const char *name = NULL;
+	size_t name_len = 0;
 	zend_ffi_val bits;
 	if (sym == YY__STAR || sym == YY_ID || sym == YY__LPAREN) {
 		sym = parse_declarator(sym, field_dcl, &name, &name_len);
@@ -1946,7 +1952,7 @@ static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 			if (sym == YY___ATTRIBUTE__) {
 				sym = parse_attributes(sym, dcl);
 			}
-		} else if (YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY__NORETURN,YY___CDECL,YY___STDCALL,YY___FASTCALL,YY___THISCALL,YY__ALIGNAS,YY___ATTRIBUTE__,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY__STAR,YY__LPAREN,YY__SEMICOLON,YY__COLON,YY__LBRACK,YY__COMMA,YY__RPAREN,YY_EOF), "\377\377\377\377\263\011\000\000\200\000\000")) {
+		} else if (YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY__NORETURN,YY___CDECL,YY___STDCALL,YY___FASTCALL,YY___THISCALL,YY__ALIGNAS,YY___ATTRIBUTE__,YY_CONST,YY_RESTRICT,YY_VOLATILE,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY__STAR,YY__LPAREN,YY__SEMICOLON,YY__COLON,YY__LBRACK,YY__RBRACE,YY__COMMA,YY__RPAREN,YY_EOF), "\377\377\377\377\273\011\000\000\200\000\000")) {
 			zend_ffi_declare_tag(name, name_len, dcl, 1);
 		} else {
 			yy_error_sym("unexpected '%s'", sym);

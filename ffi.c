@@ -2552,7 +2552,6 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 			return;
 		}
 
-		// TODO: anonymous struct/union ???
 		field = emalloc(sizeof(zend_ffi_field));
 		if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
 			struct_type->align = MAX(struct_type->align, MAX(field_type->align, field_dcl->align));
@@ -2572,7 +2571,68 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 		field->is_const = (field_dcl->flags & ZEND_FFI_DCL_CONST) != 0;
 		field_dcl->type = field_type; /* reset "owned" flag */
 
-		zend_hash_str_add_ptr(&struct_type->record.fields, name, name_len, field);
+		if (!zend_hash_str_add_ptr(&struct_type->record.fields, name, name_len, field)) {
+			zend_spprintf(&FFI_G(error), 0, "duplicate field name '%.*s' at line %d", name_len, name, FFI_G(line));
+			return;
+		}
+	}
+}
+/* }}} */
+
+void zend_ffi_add_anonymous_field(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl) /* {{{ */
+{
+	if (!FFI_G(error)) {
+		zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
+		zend_ffi_type *field_type;
+		zend_ffi_field *field;
+		zend_string *key;
+
+		ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
+		zend_ffi_finalize_type(field_dcl);
+		field_type = ZEND_FFI_TYPE(field_dcl->type);
+		if (field_type->kind != ZEND_FFI_TYPE_STRUCT) {
+			zend_spprintf(&FFI_G(error), 0, "declaration does not declare anything at line %d", FFI_G(line));
+			return;
+		}
+		
+		if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
+			struct_type->align = MAX(struct_type->align, MAX(field_type->align, field_dcl->align));
+		}
+		if (!(struct_type->attr & ZEND_FFI_ATTR_UNION)) {
+			if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
+				uint32_t field_align = MAX(field_type->align, field_dcl->align);
+				struct_type->size = ((struct_type->size + (field_align - 1)) / field_align) * field_align;
+			}
+		}
+				
+		ZEND_HASH_FOREACH_STR_KEY_PTR(&field_type->record.fields, key, field) {
+			zend_ffi_field *new_field = emalloc(sizeof(zend_ffi_field));
+
+			if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
+				new_field->offset = field->offset;
+			} else {
+				new_field->offset = struct_type->size + field->offset;
+			}
+			new_field->type = field->type;
+			new_field->is_const = field->is_const;
+			field->type = ZEND_FFI_TYPE(field->type); /* reset "owned" flag */
+
+			if (!zend_hash_add_ptr(&struct_type->record.fields, key, new_field)) {
+				zend_ffi_type_dtor(new_field->type);
+				efree(new_field);
+				zend_spprintf(&FFI_G(error), 0, "duplicate field name '%s' at line %d", ZSTR_VAL(key), FFI_G(line));
+				return;
+			}
+		} ZEND_HASH_FOREACH_END();
+
+		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
+			struct_type->size = MAX(struct_type->size, field_type->size);
+		} else {
+			struct_type->size += field_type->size;
+		}
+
+		zend_ffi_type_dtor(field_dcl->type);
+		field_dcl->type = NULL;
 	}
 }
 /* }}} */
