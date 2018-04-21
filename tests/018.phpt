@@ -18,7 +18,7 @@ try {
 }
 ?>
 ok
---EXPECTF--
+--EXPECT--
 FFI\ParserException: incomplete 'struct X' at line 1
 ok
 ok

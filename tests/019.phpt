@@ -18,7 +18,7 @@ try {
 }
 ?>
 ok
---EXPECTF--
+--EXPECT--
 ok
 ok
 ok

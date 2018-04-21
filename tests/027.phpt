@@ -74,7 +74,7 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 ?>
---EXPECTF--
+--EXPECT--
 FFI\ParserException: '[*]' not allowed in other than function prototype scope at line 1
 FFI\ParserException: '[*]' not allowed in other than function prototype scope at line 1
 FFI\ParserException: '[*]' not allowed in other than function prototype scope at line 1

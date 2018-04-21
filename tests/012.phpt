@@ -10,5 +10,5 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 ?>
---EXPECTF--
+--EXPECT--
 Exception: Serialization of 'FFI\CData' is not allowed

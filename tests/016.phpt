@@ -24,7 +24,7 @@ try {
 }
 ?>
 ok
---EXPECTF--
+--EXPECT--
 FFI\ParserException: 'function' type is not allowed at line 1
 FFI\ParserException: struct/union can't contain an instance of itself at line 1
 ok

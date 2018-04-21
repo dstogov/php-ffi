@@ -27,7 +27,7 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 ?>
---EXPECTF--
+--EXPECT--
 int(3)
 0 => 0
 1 => 10
