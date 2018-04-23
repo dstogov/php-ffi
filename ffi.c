@@ -3046,6 +3046,17 @@ void zend_ffi_declare(const char *name, size_t name_len, zend_ffi_dcl *dcl) /* {
 			zend_ffi_finalize_type(dcl);
 			if ((dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) == ZEND_FFI_DCL_TYPEDEF) {
 				zend_ffi_validate_vla(ZEND_FFI_TYPE(dcl->type));
+				if (dcl->align && dcl->align > ZEND_FFI_TYPE(dcl->type)->align) {
+					if (ZEND_FFI_TYPE_IS_OWNED(dcl->type)) {
+						ZEND_FFI_TYPE(dcl->type)->align = dcl->align;
+					} else {
+						zend_ffi_type *type = emalloc(sizeof(zend_ffi_type));
+
+						memcpy(type, ZEND_FFI_TYPE(dcl->type), sizeof(zend_ffi_type));
+						type->align = dcl->align;
+						dcl->type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+					}
+				}
 				sym = emalloc(sizeof(zend_ffi_symbol));
 				sym->kind = ZEND_FFI_SYM_TYPE;
 				sym->type = dcl->type;
@@ -3279,6 +3290,43 @@ void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl) /*
 		zend_ffi_nested_type(dcl->type, nested_dcl->type);
 	}
 	dcl->type = nested_dcl->type;
+}
+/* }}} */
+
+void zend_ffi_align_as_type(zend_ffi_dcl *dcl, zend_ffi_dcl *align_dcl) /* {{{ */
+{
+	zend_ffi_finalize_type(align_dcl);
+	dcl->align = MAX(align_dcl->align, ZEND_FFI_TYPE(align_dcl->type)->align);
+}
+/* }}} */
+
+void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
+{
+	switch (align_val->kind) {
+		case ZEND_FFI_VAL_INT32:
+		case ZEND_FFI_VAL_UINT32:
+			dcl->align = zend_ffi_type_uint32.align;
+			break;
+		case ZEND_FFI_VAL_INT64:
+		case ZEND_FFI_VAL_UINT64:
+			dcl->align = zend_ffi_type_uint64.align;
+			break;
+		case ZEND_FFI_VAL_FLOAT:
+			dcl->align = zend_ffi_type_float.align;
+			break;
+		case ZEND_FFI_VAL_DOUBLE:
+			dcl->align = zend_ffi_type_double.align;
+			break;
+		case ZEND_FFI_VAL_LONG_DOUBLE:
+			dcl->align = zend_ffi_type_long_double.align;
+			break;
+		case ZEND_FFI_VAL_CHAR:
+		case ZEND_FFI_VAL_STRING:
+			dcl->align = zend_ffi_type_char.align;
+			break;
+		default:
+			break;
+	}
 }
 /* }}} */
 

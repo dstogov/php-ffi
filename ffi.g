@@ -134,10 +134,10 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 			(	&type_name
 				{zend_ffi_dcl align_dcl = {0, 0, 0, 0, NULL};}
 				type_name(&align_dcl)
-				{/*align_as_type???*/}
+				{zend_ffi_align_as_type(dcl, &align_dcl);}
 			|	{zend_ffi_val align_val;}
 				constant_expression(&align_val)
-				{/*align_as_val???*/}
+				{zend_ffi_align_as_val(dcl, &align_val);}
 			)
 			")"
 		|	attributes(dcl)

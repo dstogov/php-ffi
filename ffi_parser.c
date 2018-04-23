@@ -3493,11 +3493,11 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 				if ((YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) && synpred_1(sym)) {
 					zend_ffi_dcl align_dcl = {0, 0, 0, 0, NULL};
 					sym = parse_type_name(sym, &align_dcl);
-					/*align_as_type???*/
+					zend_ffi_align_as_type(dcl, &align_dcl);
 				} else if (YY_IN_SET(sym, (YY__LPAREN,YY_ID,YY_OCTNUMBER,YY_DECNUMBER,YY_HEXNUMBER,YY_FLOATNUMBER,YY_STRING,YY_CHARACTER,YY__PLUS_PLUS,YY__MINUS_MINUS,YY__AND,YY__STAR,YY__PLUS,YY__MINUS,YY__TILDE,YY__BANG,YY_SIZEOF,YY__ALIGNOF,YY___ALIGNOF,YY___ALIGNOF__), "\000\000\002\000\000\000\004\100\200\361\377\007")) {
 					zend_ffi_val align_val;
 					sym = parse_constant_expression(sym, &align_val);
-					/*align_as_val???*/
+					zend_ffi_align_as_val(dcl, &align_val);
 				} else {
 					yy_error_sym("unexpected '%s'", sym);
 				}
