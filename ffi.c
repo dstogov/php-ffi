@@ -1574,7 +1574,6 @@ static int zend_ffi_validate_incomplete_type(zend_ffi_type *type, zend_bool allo
 			}
 			zend_spprintf(&FFI_G(error), 0, "incomplete type at line %d", FFI_G(line));
 			return FAILURE;
-		// TODO: incomplete arrays ???
 		} else if (!allow_ic && type->attr & ZEND_FFI_ATTR_INCOMPLETE_ARRAY) {
 			zend_spprintf(&FFI_G(error), 0, "'[]' not allowed at line %d", FFI_G(line));
 			return FAILURE;
@@ -2630,6 +2629,30 @@ void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_
 			zend_ffi_type_dtor(field_dcl->type);
 			field_dcl->type = NULL;
 			return;
+		}
+		if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
+			if (field_type->attr & ZEND_FFI_ATTR_INCOMPLETE_ARRAY) {
+				if (!FFI_G(error)) {
+					zend_spprintf(&FFI_G(error), 0, "flexible array member in union at line %d", FFI_G(line));
+				}
+				zend_ffi_type_dtor(field_dcl->type);
+				field_dcl->type = NULL;
+				return;
+			}
+		} else {
+			if (zend_hash_num_elements(&struct_type->record.fields) > 0) {
+				ZEND_HASH_REVERSE_FOREACH_PTR(&struct_type->record.fields, field) {
+					break;
+				} ZEND_HASH_FOREACH_END();
+				if (ZEND_FFI_TYPE(field->type)->attr & ZEND_FFI_ATTR_INCOMPLETE_ARRAY) {
+					if (!FFI_G(error)) {
+						zend_spprintf(&FFI_G(error), 0, "flexible array member not at end of struct at line %d", FFI_G(line));
+					}
+					zend_ffi_type_dtor(field_dcl->type);
+					field_dcl->type = NULL;
+					return;
+				}
+			}
 		}
 
 		field = emalloc(sizeof(zend_ffi_field));
