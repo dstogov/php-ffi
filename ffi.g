@@ -131,7 +131,8 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 			{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_THISCALL);}
 		|	"_Alignas"
 			"("
-			(	{zend_ffi_dcl align_dcl = {0, 0, 0, 0, NULL};}
+			(	&type_name
+				{zend_ffi_dcl align_dcl = {0, 0, 0, 0, NULL};}
 				type_name(&align_dcl)
 				{/*align_as_type???*/}
 			|	{zend_ffi_val align_val;}
@@ -341,7 +342,7 @@ declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
 	/* "char" is used as a terminator of nested declaration */
 	{zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, 0, NULL};}
 	{zend_bool nested = 0;}
-	pointer(dcl)
+	pointer(dcl)?
 	(	ID(name, name_len)
 	|	"("
 		attributes(&nested_dcl)?
@@ -349,7 +350,7 @@ declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
 		")"
 		{nested = 1;}
 	)
-	array_or_function_declarators(dcl)
+	array_or_function_declarators(dcl)?
 	{if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);}
 ;
 
@@ -357,15 +358,40 @@ abstract_declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
 	/* "char" is used as a terminator of nested declaration */
 	{zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, 0, NULL};}
 	{zend_bool nested = 0;}
-	pointer(dcl)
-	(	ID(name, name_len)
-	|	"("
-		attributes(&nested_dcl)?
-		abstract_declarator(&nested_dcl, name, name_len)
-		")"
+	pointer(dcl)?
+	(	&nested_abstract_declarator
+		nested_abstract_declarator(&nested_dcl, name, name_len)
 		{nested = 1;}
-	)?
-	array_or_function_declarators(dcl)
+	|	ID(name, name_len)
+	|	/* empty */
+	)
+	array_or_function_declarators(dcl)?
+	{if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);}
+;
+
+nested_abstract_declarator(zend_ffi_dcl *dcl, const char **name, size_t *name_len):
+	{zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, 0, NULL};}
+	{zend_bool nested = 0;}
+	"("
+	attributes(&nested_dcl)?
+	(	pointer(dcl)
+		(	&nested_abstract_declarator
+			nested_abstract_declarator(&nested_dcl, name, name_len)
+			{nested = 1;}
+		|	ID(name, name_len)
+		|	/* empty */
+		)
+		array_or_function_declarators(dcl)?
+	|	(	&nested_abstract_declarator
+			nested_abstract_declarator(&nested_dcl, name, name_len)
+			array_or_function_declarators(dcl)?
+			{nested = 1;}
+		|	ID(name, name_len)
+			array_or_function_declarators(dcl)?
+		|	array_or_function_declarators(dcl)
+		)
+	)
+	")"
 	{if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);}
 ;
 
@@ -373,7 +399,7 @@ pointer(zend_ffi_dcl *dcl):
 	(	"*"
 		{zend_ffi_make_pointer_type(dcl);}
 		type_qualifier_list(dcl)?
-	)*
+	)+
 ;
 
 array_or_function_declarators(zend_ffi_dcl *dcl):
@@ -401,7 +427,7 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 			)
 		)
 		"]"
-		array_or_function_declarators(dcl)
+		array_or_function_declarators(dcl)?
 		{dcl->attr |= attr;}
 		{zend_ffi_make_array_type(dcl, &len);}
 	|	"("
@@ -419,11 +445,11 @@ array_or_function_declarators(zend_ffi_dcl *dcl):
 			{attr |= ZEND_FFI_ATTR_VARIADIC;}
 		)?
 		")"
-		array_or_function_declarators(dcl)
+		array_or_function_declarators(dcl)?
 		{dcl->attr |= attr;}
 		{zend_ffi_make_func_type(dcl, args);}
 //	|	"(" (ID ("," ID)*)? ")" // TODO: ANSI function not-implemented ???
-	)?
+	)
 ;
 
 parameter_declaration(HashTable **args):
@@ -653,7 +679,8 @@ multiplicative_expression(zend_ffi_val *val):
 cast_expression(zend_ffi_val *val):
 	{int do_cast = 0;}
 	{zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};}
-	(	"("
+	(	&( "(" type_name ")" )
+		"("
 		type_name(&dcl)
 		")"
 		{do_cast = 1;}
@@ -718,12 +745,13 @@ unary_expression(zend_ffi_val *val):
 		cast_expression(val)
 		{zend_ffi_expr_bool_not(val);}
 	|	"sizeof"
-		(	unary_expression(val)
-			{zend_ffi_expr_sizeof_val(val);}
-		|	"("
+		(	&( "(" type_name ")" )
+			"("
 			type_name(&dcl)
 			")"
 			{zend_ffi_expr_sizeof_type(val, &dcl);}
+		|	unary_expression(val)
+			{zend_ffi_expr_sizeof_val(val);}
 		)
 	|	"_Alignof"
 		"("
@@ -731,12 +759,13 @@ unary_expression(zend_ffi_val *val):
 		")"
 		{zend_ffi_expr_alignof_type(val, &dcl);}
 	|	("__alignof"|"__alignof__")
-		(	unary_expression(val)
-			{zend_ffi_expr_alignof_val(val);}
-		|	"("
+		(	&( "(" type_name ")" )
+			"("
 			type_name(&dcl)
 			")"
 			{zend_ffi_expr_alignof_type(val, &dcl);}
+		|	unary_expression(val)
+			{zend_ffi_expr_alignof_val(val);}
 		)
 	)
 ;
