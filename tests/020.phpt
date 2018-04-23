@@ -58,7 +58,7 @@ try {
 }
 ?>
 ok
---EXPECTF--
+--EXPECT--
 FFI\Exception: Attempt to assign read-only field 'y'
 FFI\Exception: Attempt to assign read-only field 'x'
 FFI\Exception: Attempt to assign read-only location
