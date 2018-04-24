@@ -58,6 +58,7 @@ typedef enum _zend_ffi_type_kind {
 	ZEND_FFI_TYPE_UINT64,
 	ZEND_FFI_TYPE_SINT64,
 	ZEND_FFI_TYPE_ENUM,
+	ZEND_FFI_TYPE_BOOL,
 	ZEND_FFI_TYPE_CHAR,
 	ZEND_FFI_TYPE_POINTER,
 	ZEND_FFI_TYPE_FUNC,
@@ -244,6 +245,8 @@ again:
 			return &ffi_type_pointer;
 		case ZEND_FFI_TYPE_VOID:
 			return &ffi_type_void;
+		case ZEND_FFI_TYPE_BOOL:
+			return &ffi_type_uint8;
 		case ZEND_FFI_TYPE_CHAR:
 			return &ffi_type_sint8;
 		case ZEND_FFI_TYPE_ENUM:
@@ -304,6 +307,9 @@ again:
 				return SUCCESS;
 			case ZEND_FFI_TYPE_SINT64:
 				ZVAL_LONG(rv, *(int64_t*)ptr);
+				return SUCCESS;
+			case ZEND_FFI_TYPE_BOOL:
+				ZVAL_BOOL(rv, *(uint8_t*)ptr);
 				return SUCCESS;
 			case ZEND_FFI_TYPE_CHAR:
 				ZVAL_INTERNED_STR(rv, ZSTR_CHAR(*(unsigned char*)ptr));
@@ -555,6 +561,9 @@ again:
 		case ZEND_FFI_TYPE_SINT64:
 			lval = zval_get_long(value);
 			*(int64_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_BOOL:
+			*(uint8_t*)ptr = zend_is_true(value);
 			break;
 		case ZEND_FFI_TYPE_CHAR:
 			str = zval_get_tmp_string(value, &tmp_str);
@@ -978,6 +987,7 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 	zval            tmp;
 
     switch (type->kind) {
+		case ZEND_FFI_TYPE_BOOL:
 		case ZEND_FFI_TYPE_CHAR:
 		case ZEND_FFI_TYPE_ENUM:
 		case ZEND_FFI_TYPE_FLOAT:
@@ -1399,6 +1409,10 @@ again:
 			}
 			zend_throw_error(zend_ffi_exception_ce, "FFI passing pointer is not implemented");
 			return FAILURE;
+		case ZEND_FFI_TYPE_BOOL:
+			*pass_type = &ffi_type_uint8;
+			*(uint8_t*)pass_val = zend_is_true(arg);
+			break;
 		case ZEND_FFI_TYPE_CHAR:
 			str = zval_get_tmp_string(arg, &tmp_str);
 			*pass_type = &ffi_type_sint8;
@@ -1434,12 +1448,12 @@ static int zend_ffi_pass_var_arg(zval *arg, ffi_type **pass_type, void **pass_va
 			*(void**)pass_val = NULL;
 			break;
 		case IS_FALSE:
-			*pass_type = &ffi_type_sint32;
-			*(int32_t*)pass_val = 0;
+			*pass_type = &ffi_type_uint8;
+			*(uint8_t*)pass_val = 0;
 			break;
 		case IS_TRUE:
-			*pass_type = &ffi_type_sint32;
-			*(int32_t*)pass_val = 0;
+			*pass_type = &ffi_type_uint8;
+			*(uint8_t*)pass_val = 1;
 			break;
 		case IS_LONG:
 			if (sizeof(zend_long) == 4) {
@@ -2364,6 +2378,7 @@ ZEND_MINFO_FUNCTION(ffi)
 
 static const zend_ffi_type zend_ffi_type_void = {.kind=ZEND_FFI_TYPE_VOID, .size=1, .align=1};
 static const zend_ffi_type zend_ffi_type_char = {.kind=ZEND_FFI_TYPE_CHAR, .size=1, .align=_Alignof(char)};
+static const zend_ffi_type zend_ffi_type_bool = {.kind=ZEND_FFI_TYPE_BOOL, .size=1, .align=_Alignof(uint8_t)};
 static const zend_ffi_type zend_ffi_type_sint8 = {.kind=ZEND_FFI_TYPE_SINT8, .size=1, .align=_Alignof(int8_t)};
 static const zend_ffi_type zend_ffi_type_uint8 = {.kind=ZEND_FFI_TYPE_UINT8, .size=1, .align=_Alignof(uint8_t)};
 static const zend_ffi_type zend_ffi_type_sint16 = {.kind=ZEND_FFI_TYPE_SINT16, .size=2, .align=_Alignof(int16_t)};
@@ -2387,7 +2402,7 @@ const struct {
 } zend_ffi_types[] = {
 	{"void",        &zend_ffi_type_void},
 	{"char",        &zend_ffi_type_char},
-	{"bool",        &zend_ffi_type_uint8},
+	{"bool",        &zend_ffi_type_bool},
 	{"int8_t",      &zend_ffi_type_sint8},
 	{"uint8_t",     &zend_ffi_type_uint8},
 	{"int16_t",     &zend_ffi_type_sint16},
@@ -3933,6 +3948,7 @@ void zend_ffi_expr_cast(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
 		case ZEND_FFI_TYPE_UINT8:
 		case ZEND_FFI_TYPE_UINT16:
 		case ZEND_FFI_TYPE_UINT32:
+		case ZEND_FFI_TYPE_BOOL:
 			if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_UINT64 || val->kind == ZEND_FFI_VAL_INT32 || val->kind == ZEND_FFI_VAL_INT64) {
 				val->kind = ZEND_FFI_VAL_UINT32;
 			} else if (val->kind == ZEND_FFI_VAL_FLOAT || val->kind == ZEND_FFI_VAL_DOUBLE || val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
