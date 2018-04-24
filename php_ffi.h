@@ -155,12 +155,18 @@ typedef enum _zend_ffi_val_kind {
 	ZEND_FFI_VAL_STRING,
 } zend_ffi_val_kind;
 
+#ifdef HAVE_LONG_DOUBLE
+typedef long double zend_ffi_double;
+#else
+typedef double zend_ffi_double;
+#endif
+
 typedef struct _zend_ffi_val {
 	zend_ffi_val_kind   kind;
 	union {
 		uint64_t        u64;
 		int64_t         i64;
-		long double     d;
+		zend_ffi_double d;
 		char            ch;
 		struct {
 			const char *str;

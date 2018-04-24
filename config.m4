@@ -23,6 +23,8 @@ if test "$PHP_FFI" != "no"; then
     AC_MSG_ERROR(Please reinstall the libffi distribution)
   fi
 
+  AC_CHECK_TYPES(long double)
+
   PHP_CHECK_LIBRARY(ffi, ffi_call, 
   [
     PHP_ADD_INCLUDE($FFI_DIR/include)

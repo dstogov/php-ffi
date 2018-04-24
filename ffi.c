@@ -45,7 +45,9 @@ typedef enum _zend_ffi_type_kind {
 	ZEND_FFI_TYPE_VOID,
 	ZEND_FFI_TYPE_FLOAT,
 	ZEND_FFI_TYPE_DOUBLE,
+#ifdef HAVE_LONG_DOUBLE
 	ZEND_FFI_TYPE_LONGDOUBLE,
+#endif
 	ZEND_FFI_TYPE_UINT8,
 	ZEND_FFI_TYPE_SINT8,
 	ZEND_FFI_TYPE_UINT16,
@@ -219,7 +221,7 @@ again:
 			case ZEND_FFI_TYPE_DOUBLE:
 				ZVAL_DOUBLE(rv, *(double*)ptr);
 				return SUCCESS;
-#ifndef PHP_WIN32
+#ifdef HAVE_LONG_DOUBLE
 			case ZEND_FFI_TYPE_LONGDOUBLE:
 				ZVAL_DOUBLE(rv, *(long double*)ptr);
 				return SUCCESS;
@@ -309,7 +311,7 @@ again:
 			dval = zval_get_long(value);
 			*(double*)ptr = dval;
 			break;
-#ifndef PHP_WIN32
+#ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			dval = zval_get_long(value);
 			*(long double*)ptr = dval;
@@ -766,7 +768,9 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 		case ZEND_FFI_TYPE_ENUM:
 		case ZEND_FFI_TYPE_FLOAT:
 		case ZEND_FFI_TYPE_DOUBLE:
+#ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
+#endif
 		case ZEND_FFI_TYPE_UINT8:
 		case ZEND_FFI_TYPE_SINT8:
 		case ZEND_FFI_TYPE_UINT16:
@@ -1072,7 +1076,7 @@ again:
 			*pass_type = &ffi_type_double;
 			*(double*)pass_val = dval;
 			break;
-#ifndef PHP_WIN32
+#ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_double;
@@ -2176,7 +2180,10 @@ static const zend_ffi_type zend_ffi_type_sint64 = {.kind=ZEND_FFI_TYPE_SINT64, .
 static const zend_ffi_type zend_ffi_type_uint64 = {.kind=ZEND_FFI_TYPE_UINT64, .size=8, .align=_Alignof(uint64_t)};
 static const zend_ffi_type zend_ffi_type_float = {.kind=ZEND_FFI_TYPE_FLOAT, .size=sizeof(float), .align=_Alignof(float)};
 static const zend_ffi_type zend_ffi_type_double = {.kind=ZEND_FFI_TYPE_DOUBLE, .size=sizeof(double), .align=_Alignof(double)};
+
+#ifdef HAVE_LONG_DOUBLE
 static const zend_ffi_type zend_ffi_type_long_double = {.kind=ZEND_FFI_TYPE_LONGDOUBLE, .size=sizeof(long double), .align=_Alignof(long double)};
+#endif
 
 static const zend_ffi_type zend_ffi_type_ptr = {.kind=ZEND_FFI_TYPE_POINTER, .size=sizeof(void*), .align=_Alignof(void*), .pointer.type = (zend_ffi_type*)&zend_ffi_type_void};
 
@@ -2197,7 +2204,7 @@ const struct {
 	{"uint64_t",    &zend_ffi_type_uint64},
 	{"float",       &zend_ffi_type_float},
 	{"double",      &zend_ffi_type_double},
-#ifndef PHP_WIN32
+#ifdef HAVE_LONG_DOUBLE
 	{"long double", &zend_ffi_type_long_double},
 #endif
 #if SIZEOF_SIZE_T == 4
@@ -3359,7 +3366,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->u64 = val->u64 OP op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = op2->kind; \
-			val->d = (long double)val->u64 OP op2->d; \
+			val->d = (zend_ffi_double)val->u64 OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->u64 = val->u64 OP op2->ch; \
 		} else { \
@@ -3375,7 +3382,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->i64 = val->i64 OP op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = op2->kind; \
-			val->d = (long double)val->i64 OP op2->d; \
+			val->d = (zend_ffi_double)val->i64 OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->i64 = val->i64 OP op2->ch; \
 		} else { \
@@ -3383,14 +3390,14 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 		} \
 	} else if (val->kind == ZEND_FFI_VAL_FLOAT || val->kind == ZEND_FFI_VAL_DOUBLE || val->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 		if (op2->kind == ZEND_FFI_VAL_UINT32 || op2->kind == ZEND_FFI_VAL_UINT64) { \
-			val->d = val->d OP (long double)op2->u64; \
+			val->d = val->d OP (zend_ffi_double)op2->u64; \
 		} else if (op2->kind == ZEND_FFI_VAL_INT32 ||op2->kind == ZEND_FFI_VAL_INT64) { \
-			val->d = val->d OP (long double)op2->i64; \
+			val->d = val->d OP (zend_ffi_double)op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = MAX(val->kind, op2->kind); \
 			val->d = val->d OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
-			val->d = val->d OP (long double)op2->ch; \
+			val->d = val->d OP (zend_ffi_double)op2->ch; \
 		} else { \
 			val->kind = ZEND_FFI_VAL_ERROR; \
 		} \
@@ -3403,7 +3410,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->i64 = val->ch OP op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = op2->kind; \
-			val->d = (long double)val->ch OP op2->d; \
+			val->d = (zend_ffi_double)val->ch OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->ch = val->ch OP op2->ch; \
 		} else { \
@@ -3482,7 +3489,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->i64 = val->u64 OP op2->u64; /*signed/unsigned */ \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = (long double)val->u64 OP op2->d; \
+			val->i64 = (zend_ffi_double)val->u64 OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
 			val->i64 = val->u64 OP op2->d; \
@@ -3498,7 +3505,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->i64 = val->i64 OP op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = (long double)val->i64 OP op2->d; \
+			val->i64 = (zend_ffi_double)val->i64 OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
 			val->i64 = val->i64 OP op2->ch; \
@@ -3508,16 +3515,16 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 	} else if (val->kind == ZEND_FFI_VAL_FLOAT || val->kind == ZEND_FFI_VAL_DOUBLE || val->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 		if (op2->kind == ZEND_FFI_VAL_UINT32 || op2->kind == ZEND_FFI_VAL_UINT64) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = val->d OP (long double)op2->u64; \
+			val->i64 = val->d OP (zend_ffi_double)op2->u64; \
 		} else if (op2->kind == ZEND_FFI_VAL_INT32 ||op2->kind == ZEND_FFI_VAL_INT64) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = val->d OP (long double)op2->i64; \
+			val->i64 = val->d OP (zend_ffi_double)op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
 			val->i64 = val->d OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = val->d OP (long double)op2->ch; \
+			val->i64 = val->d OP (zend_ffi_double)op2->ch; \
 		} else { \
 			val->kind = ZEND_FFI_VAL_ERROR; \
 		} \
@@ -3530,7 +3537,7 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 			val->i64 = val->ch OP op2->i64; \
 		} else if (op2->kind == ZEND_FFI_VAL_FLOAT || op2->kind == ZEND_FFI_VAL_DOUBLE || op2->kind == ZEND_FFI_VAL_LONG_DOUBLE) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
-			val->i64 = (long double)val->ch OP op2->d; \
+			val->i64 = (zend_ffi_double)val->ch OP op2->d; \
 		} else if (op2->kind == ZEND_FFI_VAL_CHAR) { \
 			val->kind = ZEND_FFI_VAL_INT32; \
 			val->i64 = val->ch OP op2->ch; \
@@ -3711,7 +3718,7 @@ void zend_ffi_expr_cast(zend_ffi_val *val, zend_ffi_dcl *dcl) /* {{{ */
 				val->kind = ZEND_FFI_VAL_ERROR;
 			}
 			break;
-#ifndef PHP_WIN32
+#ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			if (val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_UINT64) {
 				val->kind = ZEND_FFI_VAL_LONG_DOUBLE;
