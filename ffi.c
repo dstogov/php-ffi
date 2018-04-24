@@ -1072,7 +1072,6 @@ static int zend_ffi_cdata_get_closure(zval *obj, zend_class_entry **ce_ptr, zend
 		return FAILURE;
 	}
 
-	// TODO: setup trampoline function (arg_info) ???
 	if (EXPECTED(EG(trampoline).common.function_name == NULL)) {
 		func = &EG(trampoline);
 	} else {
@@ -1620,7 +1619,6 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 	type = ZEND_FFI_TYPE(sym->type);
 	ZEND_ASSERT(type->kind == ZEND_FFI_TYPE_FUNC);
 
-	// TODO: setup trampoline function (arg_info) ???
 	if (EXPECTED(EG(trampoline).common.function_name == NULL)) {
 		func = &EG(trampoline);
 	} else {
