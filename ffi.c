@@ -138,7 +138,6 @@ typedef struct _zend_ffi_cdata {
 	zend_object            std;
 	zend_ffi_type         *type;
 	void                  *ptr;
-	zend_bool              user;
 	zend_bool              owned_ptr;
 	zend_bool              is_const;
 } zend_ffi_cdata;
@@ -172,7 +171,6 @@ static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 
 	cdata->type = NULL;
 	cdata->ptr = NULL;
-	cdata->user = 0;
 	cdata->owned_ptr = 0;
 	cdata->is_const = 0;
 
@@ -584,24 +582,24 @@ again:
 				break;
 			} else if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
-				void *cdata_ptr;
 
-				if (cdata->user) {
-					if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+					if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
 						*(void**)ptr = *(void**)cdata->ptr;
-						return SUCCESS;
+					} else {
+						if (cdata->owned_ptr) {
+							zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
+							return FAILURE;
+						}
+						*(void**)ptr = cdata->ptr;
 					}
+					return SUCCESS;
+				} else if (zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
 					if (cdata->owned_ptr) {
 						zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
 						return FAILURE;
 					}
-					type = ZEND_FFI_TYPE(type->pointer.type);
-					cdata_ptr = cdata->ptr;
-				} else {
-					cdata_ptr = *(void**)cdata->ptr;
-				}
-				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)ptr = cdata_ptr;
+					*(void**)ptr = cdata->ptr;
 					return SUCCESS;
 				}
 #if FFI_CLOSURES
@@ -851,8 +849,8 @@ static int zend_ffi_cdata_compare_objects(zval *o1, zval *o2) /* {{{ */
 		zend_ffi_type *type2 = ZEND_FFI_TYPE(cdata2->type);
 
 		if (type1->kind == ZEND_FFI_TYPE_POINTER && type2->kind == ZEND_FFI_TYPE_POINTER) {
-			void *ptr1 = cdata1->user ? cdata1->ptr : *(void**)cdata1->ptr;
-			void *ptr2 = cdata2->user ? cdata2->ptr : *(void**)cdata2->ptr;
+			void *ptr1 = *(void**)cdata1->ptr;
+			void *ptr2 = *(void**)cdata2->ptr;
 
 			return ptr1 == ptr2 ? 0 : (ptr1 < ptr2 ? -1 : 1);
 		}
@@ -1232,7 +1230,6 @@ static zend_object *zend_ffi_cdata_clone_obj(zval *zobject) /* {{{ */
 	new_cdata->type = type;
 	new_cdata->ptr = emalloc(type->size);
 	memcpy(new_cdata->ptr, old_cdata->ptr, type->size);
-	new_cdata->user = 1;
 	new_cdata->owned_ptr = 1;
 	new_cdata->is_const = 0;
 
@@ -1379,20 +1376,16 @@ again:
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
-				void *cdata_ptr;
 
-				if (cdata->user) {
-					cdata_ptr = cdata->ptr;
-					if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-						*(void**)pass_val = cdata_ptr;
-						return SUCCESS;
-					}
-					type = ZEND_FFI_TYPE(type->pointer.type);
-				} else {
-					cdata_ptr = *(void**)cdata->ptr;
-				}
 				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-					*(void**)pass_val = cdata_ptr;
+					if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
+						*(void**)pass_val = *(void**)cdata->ptr;
+					} else {
+						*(void**)pass_val = cdata->ptr;
+					}
+					return SUCCESS;
+				} else if (zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+					*(void**)pass_val = cdata->ptr;
 					return SUCCESS;
 				}
 #if FFI_CLOSURES
@@ -1407,7 +1400,7 @@ again:
 				}
 #endif
 			}
-			zend_throw_error(zend_ffi_exception_ce, "FFI passing pointer is not implemented");
+			zend_throw_error(zend_ffi_exception_ce, "Passing incompatible pointer");
 			return FAILURE;
 		case ZEND_FFI_TYPE_BOOL:
 			*pass_type = &ffi_type_uint8;
@@ -1952,7 +1945,6 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	}
 	cdata->type = dcl.type;
 	cdata->ptr = ptr;
-	cdata->user = 1;
 	cdata->owned_ptr = owned_ptr;
 	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
@@ -1970,22 +1962,16 @@ ZEND_METHOD(FFI, free) /* {{{ */
 	ZEND_PARSE_PARAMETERS_END();
 
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
-	if (cdata->owned_ptr) {
+
+	if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
+		efree(*(void**)cdata->ptr);
+		*(void**)cdata->ptr = NULL;
+	} else if (!cdata->owned_ptr) {
+		efree(cdata->ptr);
+		cdata->ptr = NULL;
 		cdata->owned_ptr = 0;
-	}
-	if (cdata->user) {
-		if (cdata->ptr) {
-			efree(cdata->ptr);
-			cdata->ptr = NULL;
-		}
 	} else {
-		zend_ffi_type *type = ZEND_FFI_TYPE(cdata->type);
-		if (type->kind != ZEND_FFI_TYPE_POINTER) {
-			zend_throw_error(zend_ffi_exception_ce, "free() non a C pointer");
-		} else if (*(void**)cdata->ptr) {
-			efree(*(void**)cdata->ptr);
-			*(void**)cdata->ptr = NULL;
-		}
+		zend_throw_error(zend_ffi_exception_ce, "free() non a C pointer");
 	}
 }
 /* }}} */
@@ -2066,7 +2052,6 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	}
 	cdata->type = dcl.type;
 	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
-	cdata->user = 1;
 	cdata->owned_ptr = 0;
 	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
@@ -2127,13 +2112,21 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 
 	cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
 	type1 = ZEND_FFI_TYPE(cdata1->type);
-	ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
+	if (type1->kind == ZEND_FFI_TYPE_POINTER) {
+		ptr1 = *(void**)cdata1->ptr;
+	} else {
+		ptr1 = cdata1->ptr;
+	}
 	if (str2) {
 		ptr2 = ZSTR_VAL(str2);
 	} else {
 		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
 		type2 = ZEND_FFI_TYPE(cdata2->type);
-		ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+		if (type2->kind == ZEND_FFI_TYPE_POINTER) {
+			ptr2 = *(void**)cdata2->ptr;
+		} else {
+			ptr2 = cdata2->ptr;
+		}
 	}
 	// TODO: check boundary ???
 	memcpy(ptr1, ptr2, size);
@@ -2170,14 +2163,22 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 	} else {
 		cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
 		type1 = ZEND_FFI_TYPE(cdata1->type);
-		ptr1 = (!cdata1->user && type1->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata1->ptr : cdata1->ptr;
+		if (type1->kind == ZEND_FFI_TYPE_POINTER) {
+			ptr1 = *(void**)cdata1->ptr;
+		} else {
+			ptr1 = cdata1->ptr;
+		}
 	}
 	if (str2) {
 		ptr2 = ZSTR_VAL(str2);
 	} else {
 		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
 		type2 = ZEND_FFI_TYPE(cdata2->type);
-		ptr2 = (!cdata2->user && type2->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata2->ptr : cdata2->ptr;
+		if (type2->kind == ZEND_FFI_TYPE_POINTER) {
+			ptr2 = *(void**)cdata2->ptr;
+		} else {
+			ptr2 = cdata2->ptr;
+		}
 	}
 	// TODO: check boundary ???
 	ret = memcmp(ptr1, ptr2, size);
@@ -2207,7 +2208,11 @@ ZEND_METHOD(FFI, memset) /* {{{ */
 
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	type = ZEND_FFI_TYPE(cdata->type);
-	ptr = (!cdata->user && type->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata->ptr : cdata->ptr;
+	if (type->kind == ZEND_FFI_TYPE_POINTER) {
+		ptr = *(void**)cdata->ptr;
+	} else {
+		ptr = cdata->ptr;
+	}
 	// TODO: check boundary ???
 	memset(ptr, ch, size);
 }
@@ -2229,7 +2234,11 @@ ZEND_METHOD(FFI, string) /* {{{ */
 
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	type = ZEND_FFI_TYPE(cdata->type);
-	ptr = (!cdata->user && type->kind == ZEND_FFI_TYPE_POINTER) ? *(void**)cdata->ptr : cdata->ptr;
+	if (type->kind == ZEND_FFI_TYPE_POINTER) {
+		ptr = *(void**)cdata->ptr;
+	} else {
+		ptr = cdata->ptr;
+	}
 	if (EX_NUM_ARGS() == 2) {
 		// TODO: check boundary ???
 		RETURN_STRINGL((char*)ptr, size);
