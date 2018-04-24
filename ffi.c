@@ -25,6 +25,7 @@
 #include "ext/standard/info.h"
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
+#include "zend_closures.h"
 
 #include <ffi.h>
 
@@ -154,6 +155,7 @@ static zend_internal_function zend_ffi_new_fn;
 static zend_internal_function zend_ffi_cast_fn;
 
 /* forward declarations */
+static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value);
 static void zend_ffi_finalize_type(zend_ffi_dcl *dcl);
 static ZEND_FUNCTION(ffi_trampoline);
 
@@ -205,6 +207,59 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 		}
 	}
 	return 0;
+}
+/* }}} */
+
+static ffi_type *zend_ffi_get_type(zend_ffi_type *type) /* {{{ */
+{
+	zend_ffi_type_kind kind = type->kind;
+
+again:
+    switch (kind) {
+		case ZEND_FFI_TYPE_FLOAT:
+			return &ffi_type_float;
+		case ZEND_FFI_TYPE_DOUBLE:
+			return &ffi_type_double;
+#ifndef PHP_WIN32
+		case ZEND_FFI_TYPE_LONGDOUBLE:
+			return &ffi_type_longdouble;
+#endif
+		case ZEND_FFI_TYPE_UINT8:
+			return &ffi_type_uint8;
+		case ZEND_FFI_TYPE_SINT8:
+			return &ffi_type_sint8;
+		case ZEND_FFI_TYPE_UINT16:
+			return &ffi_type_uint16;
+		case ZEND_FFI_TYPE_SINT16:
+			return &ffi_type_sint16;
+		case ZEND_FFI_TYPE_UINT32:
+			return &ffi_type_uint32;
+		case ZEND_FFI_TYPE_SINT32:
+			return &ffi_type_sint32;
+		case ZEND_FFI_TYPE_UINT64:
+			return &ffi_type_uint64;
+		case ZEND_FFI_TYPE_SINT64:
+			return &ffi_type_sint64;
+		case ZEND_FFI_TYPE_POINTER:
+			return &ffi_type_pointer;
+		case ZEND_FFI_TYPE_VOID:
+			return &ffi_type_void;
+		case ZEND_FFI_TYPE_CHAR:
+			return &ffi_type_sint8;
+		case ZEND_FFI_TYPE_ENUM:
+			kind = type->enumeration.kind;
+			goto again;
+		case ZEND_FFI_TYPE_STRUCT:
+			zend_throw_error(zend_ffi_exception_ce, "FFI return struct/union is not implemented");
+			break;
+		case ZEND_FFI_TYPE_ARRAY:
+			zend_throw_error(zend_ffi_exception_ce, "FFI return array is not implemented");
+			break;
+		default:
+			zend_throw_error(zend_ffi_exception_ce, "FFI internal error");
+			break;
+	}
+	return NULL;
 }
 /* }}} */
 
@@ -265,12 +320,6 @@ again:
 					return SUCCESS;
 				}
 				break;
-			case ZEND_FFI_TYPE_FUNC:
-				if (*(void**)ptr == NULL) {
-					ZVAL_NULL(rv);
-					return SUCCESS;
-				}
-				break;
 			default:
 				break;
 		}
@@ -292,6 +341,164 @@ again:
 	return SUCCESS;
 }
 /* }}} */
+
+#if FFI_CLOSURES
+typedef struct _zend_ffi_callback_data {
+	zend_fcall_info_cache  fcc;
+	zend_ffi_type         *type;
+	void                  *code;
+	void                  *callback;
+	ffi_cif                cif;
+	uint32_t               arg_count;
+	ffi_type              *ret_type;
+	ffi_type              *arg_types[0];
+} zend_ffi_callback_data;
+
+static void zend_ffi_callback_hash_dtor(zval *zv) /* {{{ */
+{
+	zend_ffi_callback_data *callback_data = Z_PTR_P(zv);
+
+	ffi_closure_free(callback_data->callback);
+	if (callback_data->fcc.function_handler->common.fn_flags & ZEND_ACC_CLOSURE) {
+		OBJ_RELEASE(ZEND_CLOSURE_OBJECT(callback_data->fcc.function_handler));
+	}
+	efree(callback_data);
+}
+/* }}} */
+
+static void zend_ffi_callback_trampoline(ffi_cif* cif, void* ret, void** args, void* data) /* {{{ */
+{
+	zend_ffi_callback_data *callback_data = (zend_ffi_callback_data*)data;
+	zend_fcall_info fci;
+	zval retval;
+	ALLOCA_FLAG(use_heap)
+
+	fci.size = sizeof(zend_fcall_info);
+	ZVAL_UNDEF(&fci.function_name);
+	fci.retval = &retval;
+	fci.params = do_alloca(sizeof(zval) *callback_data->arg_count, use_heap);
+	fci.object = NULL;
+	fci.no_separation = 1;
+	fci.param_count = callback_data->arg_count;
+
+	if (callback_data->type->func.args) {
+		int n = 0;
+		zend_ffi_type *arg_type;
+
+		ZEND_HASH_FOREACH_PTR(callback_data->type->func.args, arg_type) {
+			arg_type = ZEND_FFI_TYPE(arg_type);
+			zend_ffi_cdata_to_zval(NULL, args[n], arg_type, BP_VAR_R, &fci.params[n], (arg_type->attr & ZEND_FFI_ATTR_CONST));
+			n++;
+		} ZEND_HASH_FOREACH_END();
+	}
+
+	ZVAL_UNDEF(&retval);
+	if (zend_call_function(&fci, &callback_data->fcc) != SUCCESS) {
+		zend_throw_error(zend_ffi_exception_ce, "Cannot call callback");
+	}
+
+	if (callback_data->arg_count) {
+		int n = 0;
+
+		for (n = 0; n < callback_data->arg_count; n++) {
+			zval_ptr_dtor(&fci.params[n]);
+			n++;
+		}
+	}
+	free_alloca(fci.params, use_heap);
+
+	zend_ffi_zval_to_cdata(ret, ZEND_FFI_TYPE(callback_data->type->func.ret_type), &retval);
+}
+/* }}} */
+
+static void *zend_ffi_create_callback(zend_ffi_type *type, zval *value) /* {{{ */
+{
+	zend_fcall_info_cache fcc;
+	char *error = NULL;
+	uint32_t arg_count;
+	void *code;
+	void *callback;
+	zend_ffi_callback_data *callback_data;
+
+	if (type->attr & ZEND_FFI_ATTR_VARIADIC) {
+		zend_throw_error(zend_ffi_exception_ce, "Variadic function closures are not supported");
+		return NULL;
+	}
+
+	if (!zend_is_callable_ex(value, NULL, 0, NULL, &fcc, &error)) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assing an invalid callback, %s", error);
+		return NULL;
+	}
+
+	arg_count = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
+	if (arg_count < fcc.function_handler->common.required_num_args) {
+		zend_throw_error(zend_ffi_exception_ce, "Attempt to assing an invalid callback, insufficient number of arguments");
+		return NULL;
+	}
+
+	callback = ffi_closure_alloc(sizeof(ffi_closure), &code);
+	if (!callback) {
+		zend_throw_error(zend_ffi_exception_ce, "Cannot allocate callback");
+		return NULL;
+	}
+
+	callback_data = emalloc(sizeof(zend_ffi_callback_data) + sizeof(ffi_type*) * arg_count);
+	memcpy(&callback_data->fcc, &fcc, sizeof(zend_fcall_info_cache));
+	callback_data->type = type;
+	callback_data->callback = callback;
+	callback_data->code = code;
+	callback_data->arg_count = arg_count;
+
+	if (type->func.args) {
+		int n = 0;
+		zend_ffi_type *arg_type;
+
+		ZEND_HASH_FOREACH_PTR(type->func.args, arg_type) {
+			arg_type = ZEND_FFI_TYPE(arg_type);
+			callback_data->arg_types[n] = zend_ffi_get_type(arg_type);
+			if (!callback_data->arg_types[n]) {
+				efree(callback_data);
+				ffi_closure_free(callback);
+				return NULL;
+			}
+			n++;
+		} ZEND_HASH_FOREACH_END();
+	}
+	callback_data->ret_type = zend_ffi_get_type(type->func.ret_type);
+	if (!callback_data->ret_type) {
+		efree(callback_data);
+		ffi_closure_free(callback);
+		return NULL;
+	}
+
+	if (ffi_prep_cif(&callback_data->cif, type->func.abi, callback_data->arg_count, callback_data->ret_type, callback_data->arg_types) != FFI_OK) {
+		zend_throw_error(zend_ffi_exception_ce, "Cannot prepare callback CIF");
+		efree(callback_data);
+		ffi_closure_free(callback);
+		return NULL;
+	}
+
+	if (ffi_prep_closure_loc(callback, &callback_data->cif, zend_ffi_callback_trampoline, callback_data, code) != FFI_OK) {
+		zend_throw_error(zend_ffi_exception_ce, "Cannot prepare callback");
+		efree(callback_data);
+		ffi_closure_free(callback);
+		return NULL;
+	}
+
+	if (!FFI_G(callbacks)) {
+		ALLOC_HASHTABLE(FFI_G(callbacks));
+		zend_hash_init(FFI_G(callbacks), 0, NULL, zend_ffi_callback_hash_dtor, 0);
+	}
+	zend_hash_next_index_insert_ptr(FFI_G(callbacks), callback_data);
+
+	if (fcc.function_handler->common.fn_flags & ZEND_ACC_CLOSURE) {
+		GC_ADDREF(ZEND_CLOSURE_OBJECT(fcc.function_handler));
+	}
+
+	return code;
+}
+/* }}} */
+#endif
 
 static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /* {{{ */
 {
@@ -362,23 +569,19 @@ again:
 		case ZEND_FFI_TYPE_ENUM:
 			kind = type->enumeration.kind;
 			goto again;
-		case ZEND_FFI_TYPE_FUNC:
-			if (Z_TYPE_P(value) == IS_NULL) {
-				*(void**)ptr = NULL;
-				break;
-			}
-			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
-			return FAILURE;
 		case ZEND_FFI_TYPE_POINTER:
 			if (Z_TYPE_P(value) == IS_NULL) {
 				*(void**)ptr = NULL;
 				break;
-			}
-			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
+			} else if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
 				void *cdata_ptr;
 
 				if (cdata->user) {
+					if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+						*(void**)ptr = *(void**)cdata->ptr;
+						return SUCCESS;
+					}
 					if (cdata->owned_ptr) {
 						zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
 						return FAILURE;
@@ -392,6 +595,17 @@ again:
 					*(void**)ptr = cdata_ptr;
 					return SUCCESS;
 				}
+#if FFI_CLOSURES
+			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_FUNC) {
+				void *callback = zend_ffi_create_callback(ZEND_FFI_TYPE(type->pointer.type), value);
+
+				if (callback) {
+					*(void**)ptr = callback;
+					break;
+				} else {
+					return FAILURE;
+				}
+#endif
 			}
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
 			return FAILURE;
@@ -995,6 +1209,26 @@ static void zend_ffi_cdata_free_obj(zend_object *object) /* {{{ */
 }
 /* }}} */
 
+static zend_object *zend_ffi_cdata_clone_obj(zval *zobject) /* {{{ */
+{
+	zend_ffi_cdata *old_cdata = (zend_ffi_cdata*)Z_OBJ_P(zobject);
+	zend_ffi_type *type = ZEND_FFI_TYPE(old_cdata->type);
+	zend_ffi_cdata *new_cdata;
+
+	new_cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+	if (type->kind < ZEND_FFI_TYPE_POINTER) {
+		new_cdata->std.handlers = &zend_ffi_cdata_value_handlers;
+	}
+	new_cdata->type = type;
+	new_cdata->ptr = emalloc(type->size);
+	memcpy(new_cdata->ptr, old_cdata->ptr, type->size);
+	new_cdata->user = 1;
+	new_cdata->owned_ptr = 1;
+	new_cdata->is_const = 0;
+
+	return &new_cdata->std;
+}
+/* }}} */
 
 static zval *zend_ffi_read_var(zval *object, zval *member, int read_type, void **cache_slot, zval *rv) /* {{{ */
 {
@@ -1145,24 +1379,26 @@ again:
 					}
 					type = ZEND_FFI_TYPE(type->pointer.type);
 				} else {
-					cdata_ptr = *(void**)cdata->ptr;;
+					cdata_ptr = *(void**)cdata->ptr;
 				}
 				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 					*(void**)pass_val = cdata_ptr;
 					return SUCCESS;
 				}
+#if FFI_CLOSURES
+			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_FUNC) {
+				void *callback = zend_ffi_create_callback(ZEND_FFI_TYPE(type->pointer.type), arg);
+
+				if (callback) {
+					*(void**)pass_val = callback;
+					break;
+				} else {
+					return FAILURE;
+				}
+#endif
 			}
 			zend_throw_error(zend_ffi_exception_ce, "FFI passing pointer is not implemented");
 			return FAILURE;
-		case ZEND_FFI_TYPE_FUNC:
-			*pass_type = &ffi_type_pointer;
-			if (Z_TYPE_P(arg) == IS_NULL) {
-				*(void**)pass_val = NULL;
-			} else {
-				zend_throw_error(zend_ffi_exception_ce, "FFI passing function pointer is not implemented");
-				return FAILURE;
-			}
-			break;
 		case ZEND_FFI_TYPE_CHAR:
 			str = zval_get_tmp_string(arg, &tmp_str);
 			*pass_type = &ffi_type_sint8;
@@ -1230,61 +1466,6 @@ static int zend_ffi_pass_var_arg(zval *arg, ffi_type **pass_type, void **pass_va
 }
 /* }}} */
 
-static ffi_type *zend_ffi_ret_type(zend_ffi_type *type) /* {{{ */
-{
-	zend_ffi_type_kind kind = type->kind;
-
-again:
-    switch (kind) {
-		case ZEND_FFI_TYPE_FLOAT:
-			return &ffi_type_float;
-		case ZEND_FFI_TYPE_DOUBLE:
-			return &ffi_type_double;
-#ifndef PHP_WIN32
-		case ZEND_FFI_TYPE_LONGDOUBLE:
-			return &ffi_type_longdouble;
-#endif
-		case ZEND_FFI_TYPE_UINT8:
-			return &ffi_type_uint8;
-		case ZEND_FFI_TYPE_SINT8:
-			return &ffi_type_sint8;
-		case ZEND_FFI_TYPE_UINT16:
-			return &ffi_type_uint16;
-		case ZEND_FFI_TYPE_SINT16:
-			return &ffi_type_sint16;
-		case ZEND_FFI_TYPE_UINT32:
-			return &ffi_type_uint32;
-		case ZEND_FFI_TYPE_SINT32:
-			return &ffi_type_sint32;
-		case ZEND_FFI_TYPE_UINT64:
-			return &ffi_type_uint64;
-		case ZEND_FFI_TYPE_SINT64:
-			return &ffi_type_sint64;
-		case ZEND_FFI_TYPE_POINTER:
-			return &ffi_type_pointer;
-		case ZEND_FFI_TYPE_FUNC:
-			return &ffi_type_pointer;
-		case ZEND_FFI_TYPE_VOID:
-			return &ffi_type_void;
-		case ZEND_FFI_TYPE_CHAR:
-			return &ffi_type_sint8;
-		case ZEND_FFI_TYPE_ENUM:
-			kind = type->enumeration.kind;
-			goto again;
-		case ZEND_FFI_TYPE_STRUCT:
-			zend_throw_error(zend_ffi_exception_ce, "FFI return struct/union is not implemented");
-			break;
-		case ZEND_FFI_TYPE_ARRAY:
-			zend_throw_error(zend_ffi_exception_ce, "FFI return array is not implemented");
-			break;
-		default:
-			zend_throw_error(zend_ffi_exception_ce, "FFI internal error");
-			break;
-	}
-	return NULL;
-}
-/* }}} */
-
 static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 {
 	zend_ffi_type *type = EX(func)->internal_function.reserved[0];
@@ -1333,7 +1514,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 				}
 			}
 		}
-		ret_type = zend_ffi_ret_type(ZEND_FFI_TYPE(type->func.ret_type));
+		ret_type = zend_ffi_get_type(ZEND_FFI_TYPE(type->func.ret_type));
 		if (!ret_type) {
 			free_alloca(arg_types, arg_types_use_heap);
 			free_alloca(arg_values, arg_values_use_heap);
@@ -1369,7 +1550,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 				} ZEND_HASH_FOREACH_END();
 			}
 		}
-		ret_type = zend_ffi_ret_type(ZEND_FFI_TYPE(type->func.ret_type));
+		ret_type = zend_ffi_get_type(ZEND_FFI_TYPE(type->func.ret_type));
 		if (!ret_type) {
 			free_alloca(arg_types, arg_types_use_heap);
 			free_alloca(arg_values, arg_values_use_heap);
@@ -2113,7 +2294,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	memcpy(&zend_ffi_cdata_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	zend_ffi_cdata_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
 	zend_ffi_cdata_handlers.free_obj             = zend_ffi_cdata_free_obj;
-	zend_ffi_cdata_handlers.clone_obj            = NULL;
+	zend_ffi_cdata_handlers.clone_obj            = zend_ffi_cdata_clone_obj;
 	zend_ffi_cdata_handlers.read_property        = zend_ffi_cdata_read_field;
 	zend_ffi_cdata_handlers.write_property       = zend_ffi_cdata_write_field;
 	zend_ffi_cdata_handlers.read_dimension       = zend_ffi_cdata_read_dim;
@@ -2133,7 +2314,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	memcpy(&zend_ffi_cdata_value_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	zend_ffi_cdata_value_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
 	zend_ffi_cdata_value_handlers.free_obj             = zend_ffi_cdata_free_obj;
-	zend_ffi_cdata_value_handlers.clone_obj            = NULL;
+	zend_ffi_cdata_value_handlers.clone_obj            = zend_ffi_cdata_clone_obj;
 	zend_ffi_cdata_value_handlers.read_property        = NULL;
 	zend_ffi_cdata_value_handlers.write_property       = NULL;
 	zend_ffi_cdata_value_handlers.read_dimension       = NULL;
@@ -2152,6 +2333,19 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_value_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_value_handlers.get_closure          = NULL;
 
+	return SUCCESS;
+}
+/* }}} */
+
+/* {{{ ZEND_RSHUTDOWN_FUNCTION
+ */
+ZEND_RSHUTDOWN_FUNCTION(ffi)
+{
+	if (FFI_G(callbacks)) {
+		zend_hash_destroy(FFI_G(callbacks));
+		FREE_HASHTABLE(FFI_G(callbacks));
+		FFI_G(callbacks) = NULL;
+	}
 	return SUCCESS;
 }
 /* }}} */
@@ -2265,7 +2459,7 @@ zend_module_entry ffi_module_entry = {
 	ZEND_MINIT(ffi),		/* ZEND_MINIT - Module initialization */
 	NULL,					/* ZEND_MSHUTDOWN - Module shutdown */
 	NULL,					/* ZEND_RINIT - Request initialization */
-	NULL,					/* ZEND_RSHUTDOWN - Request shutdown */
+	ZEND_RSHUTDOWN(ffi),	/* ZEND_RSHUTDOWN - Request shutdown */
 	ZEND_MINFO(ffi),		/* ZEND_MINFO - Module info */
 	ZEND_FFI_VERSION,		/* Version */
 	ZEND_MODULE_GLOBALS(ffi),
@@ -2704,7 +2898,7 @@ void zend_ffi_add_anonymous_field(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_
 			zend_spprintf(&FFI_G(error), 0, "declaration does not declare anything at line %d", FFI_G(line));
 			return;
 		}
-		
+
 		if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED) && !(field_dcl->attr & ZEND_FFI_ATTR_PACKED)) {
 			struct_type->align = MAX(struct_type->align, MAX(field_type->align, field_dcl->align));
 		}
@@ -2714,7 +2908,7 @@ void zend_ffi_add_anonymous_field(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_
 				struct_type->size = ((struct_type->size + (field_align - 1)) / field_align) * field_align;
 			}
 		}
-				
+
 		ZEND_HASH_FOREACH_STR_KEY_PTR(&field_type->record.fields, key, field) {
 			zend_ffi_field *new_field = emalloc(sizeof(zend_ffi_field));
 

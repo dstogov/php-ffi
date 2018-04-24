@@ -24,6 +24,7 @@ typedef struct _zend_ffi_type  zend_ffi_type;
 ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	/* predefined ffi_types */
 	HashTable types;
+	HashTable *callbacks;
 	/* ffi_parser */
 	unsigned const char *buf;
 	unsigned const char *end;
