@@ -64,15 +64,11 @@
 static const char * sym_name[];
 
 static void yy_error(const char *msg) {
-	if (!FFI_G(error)) {
-		zend_spprintf(&FFI_G(error), 0, "%s at line %d", msg, yy_line);
-	}
+	zend_ffi_parser_error("%s at line %d", msg, yy_line);
 }
 
 static void yy_error_sym(const char *msg, int sym) {
-	if (!FFI_G(error)) {
-		zend_spprintf(&FFI_G(error), 0, "%s '%s' at line %d", msg, sym_name[sym], yy_line);
-	}
+	zend_ffi_parser_error("%s '%s' at line %d", msg, sym_name[sym], yy_line);
 }
 
 %}
@@ -817,27 +813,34 @@ SKIP: ( EOL | WS | ONE_LINE_COMMENT | COMMENT )*;
 
 %%
 int zend_ffi_parse_decl(zend_string *str) {
-	FFI_G(error) = NULL;
-	FFI_G(allow_vla) = 0;
-	yy_buf = (unsigned char*)ZSTR_VAL(str);
-	yy_end = yy_buf + ZSTR_LEN(str);
-	parse();
-	return FFI_G(error) ? FAILURE : SUCCESS;
+	if (SETJMP(FFI_G(bailout))==0) {
+		FFI_G(allow_vla) = 0;
+		yy_buf = (unsigned char*)ZSTR_VAL(str);
+		yy_end = yy_buf + ZSTR_LEN(str);
+		parse();
+		return SUCCESS;
+	} else {
+		return FAILURE;
+	}
 }
 
 int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl) {
 	int sym;
 
-	FFI_G(error) = NULL;
-	FFI_G(allow_vla) = 0;
-	yy_pos = yy_text = yy_buf = (unsigned char*)ZSTR_VAL(str);
-	yy_end = yy_buf + ZSTR_LEN(str);
-	yy_line = 1;
-	sym = parse_type_name(get_sym(), dcl);
-	if (sym != YY_EOF) {
-		yy_error_sym("<EOF> expected, got '%s'", sym);
-	}
-	return FFI_G(error) ? FAILURE : SUCCESS;
+	if (SETJMP(FFI_G(bailout))==0) {
+		FFI_G(allow_vla) = 0;
+		yy_pos = yy_text = yy_buf = (unsigned char*)ZSTR_VAL(str);
+		yy_end = yy_buf + ZSTR_LEN(str);
+		yy_line = 1;
+		sym = parse_type_name(get_sym(), dcl);
+		if (sym != YY_EOF) {
+			yy_error_sym("<EOF> expected, got '%s'", sym);
+		}
+		zend_ffi_validate_type_name(dcl);
+		return SUCCESS;
+	} else {
+		return FAILURE;
+	};
 }
 
 /*

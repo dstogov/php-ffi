@@ -26,12 +26,12 @@ ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	HashTable types;
 	HashTable *callbacks;
 	/* ffi_parser */
+	JMP_BUF	bailout;
 	unsigned const char *buf;
 	unsigned const char *end;
 	unsigned const char *pos;
 	unsigned const char *text;
 	int line;
-	char *error;
 	HashTable *symbols;
 	HashTable *tags;
 	zend_bool allow_vla;
@@ -180,6 +180,7 @@ int zend_ffi_parse_decl(zend_string *str);
 int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl);
 
 /* parser callbacks */
+void zend_ffi_parser_error(const char *msg, ...) ZEND_NORETURN;
 int zend_ffi_is_typedef_name(const char *name, size_t name_len);
 void zend_ffi_resolve_typedef(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_resolve_const(const char *name, size_t name_len, zend_ffi_val *val);
@@ -203,6 +204,7 @@ void zend_ffi_set_abi(zend_ffi_dcl *dcl, uint16_t abi);
 void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl);
 void zend_ffi_align_as_type(zend_ffi_dcl *dcl, zend_ffi_dcl *align_dcl);
 void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val);
+void zend_ffi_validate_type_name(zend_ffi_dcl *dcl);
 
 void zend_ffi_expr_conditional(zend_ffi_val *val, zend_ffi_val *op2, zend_ffi_val *op3);
 void zend_ffi_expr_bool_or(zend_ffi_val *val, zend_ffi_val *op2);
