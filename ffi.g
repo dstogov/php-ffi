@@ -60,17 +60,20 @@
 #define yy_text FFI_G(text)
 #define yy_line FFI_G(line)
 
-#define yy_error(msg) { \
-		if (!FFI_G(error)) { \
-			zend_spprintf(&FFI_G(error), 0, "%s at line %d", msg, yy_line); \
-		} \
-	} while (0)
+/* forward declaration */
+static const char * sym_name[];
 
-#define yy_error_sym(msg, sym) { \
-		if (!FFI_G(error)) { \
-			zend_spprintf(&FFI_G(error), 0, msg " at line %d", sym_name[sym], yy_line); \
-		} \
-	} while (0)
+static void yy_error(const char *msg) {
+	if (!FFI_G(error)) {
+		zend_spprintf(&FFI_G(error), 0, "%s at line %d", msg, yy_line);
+	}
+}
+
+static void yy_error_sym(const char *msg, int sym) {
+	if (!FFI_G(error)) {
+		zend_spprintf(&FFI_G(error), 0, "%s '%s' at line %d", msg, sym_name[sym], yy_line);
+	}
+}
 
 %}
 

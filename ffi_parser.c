@@ -33,17 +33,20 @@
 #define yy_text FFI_G(text)
 #define yy_line FFI_G(line)
 
-#define yy_error(msg) { \
-		if (!FFI_G(error)) { \
-			zend_spprintf(&FFI_G(error), 0, "%s at line %d", msg, yy_line); \
-		} \
-	} while (0)
+/* forward declaration */
+static const char * sym_name[];
 
-#define yy_error_sym(msg, sym) { \
-		if (!FFI_G(error)) { \
-			zend_spprintf(&FFI_G(error), 0, msg " at line %d", sym_name[sym], yy_line); \
-		} \
-	} while (0)
+static void yy_error(const char *msg) {
+	if (!FFI_G(error)) {
+		zend_spprintf(&FFI_G(error), 0, "%s at line %d", msg, yy_line);
+	}
+}
+
+static void yy_error_sym(const char *msg, int sym) {
+	if (!FFI_G(error)) {
+		zend_spprintf(&FFI_G(error), 0, "%s '%s' at line %d", msg, sym_name[sym], yy_line);
+	}
+}
 
 #define YYPOS cpos
 #define YYEND cend
@@ -144,7 +147,7 @@
 #define YY_ONE_LINE_COMMENT 93
 #define YY_COMMENT 94
 
-const char * sym_name[] = {
+static const char * sym_name[] = {
 	"<EOF>",
 	",",
 	";",
@@ -1651,7 +1654,7 @@ _yy_fin:
 
 static int skip_EOL(int sym) {
 	if (sym != YY_EOL) {
-		yy_error_sym("<EOL> expected, got '%s'", sym);
+		yy_error_sym("<EOL> expected, got", sym);
 	}
 	sym = get_skip_sym();
 	return sym;
@@ -1659,7 +1662,7 @@ static int skip_EOL(int sym) {
 
 static int skip_WS(int sym) {
 	if (sym != YY_WS) {
-		yy_error_sym("<WS> expected, got '%s'", sym);
+		yy_error_sym("<WS> expected, got", sym);
 	}
 	sym = get_skip_sym();
 	return sym;
@@ -1667,7 +1670,7 @@ static int skip_WS(int sym) {
 
 static int skip_ONE_LINE_COMMENT(int sym) {
 	if (sym != YY_ONE_LINE_COMMENT) {
-		yy_error_sym("<ONE_LINE_COMMENT> expected, got '%s'", sym);
+		yy_error_sym("<ONE_LINE_COMMENT> expected, got", sym);
 	}
 	sym = get_skip_sym();
 	return sym;
@@ -1675,7 +1678,7 @@ static int skip_ONE_LINE_COMMENT(int sym) {
 
 static int skip_COMMENT(int sym) {
 	if (sym != YY_COMMENT) {
-		yy_error_sym("<COMMENT> expected, got '%s'", sym);
+		yy_error_sym("<COMMENT> expected, got", sym);
 	}
 	sym = get_skip_sym();
 	return sym;
@@ -1694,7 +1697,7 @@ static int get_sym(void) {
 		} else if (sym == YY_COMMENT) {
 			sym = skip_COMMENT(sym);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -3415,7 +3418,7 @@ static int parse_declarations(int sym) {
 			}
 		}
 		if (sym != YY__SEMICOLON) {
-			yy_error_sym("';' expected, got '%s'", sym);
+			yy_error_sym("';' expected, got", sym);
 		}
 		sym = get_sym();
 	}
@@ -3460,7 +3463,7 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 				} else if (sym == YY___INLINE__) {
 					sym = get_sym();
 				} else {
-					yy_error_sym("unexpected '%s'", sym);
+					yy_error_sym("unexpected", sym);
 				}
 				dcl->flags |= ZEND_FFI_DCL_INLINE;
 				break;
@@ -3487,7 +3490,7 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 			case YY__ALIGNAS:
 				sym = get_sym();
 				if (sym != YY__LPAREN) {
-					yy_error_sym("'(' expected, got '%s'", sym);
+					yy_error_sym("'(' expected, got", sym);
 				}
 				sym = get_sym();
 				if ((YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) && synpred_1(sym)) {
@@ -3499,10 +3502,10 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 					sym = parse_constant_expression(sym, &align_val);
 					zend_ffi_align_as_val(dcl, &align_val);
 				} else {
-					yy_error_sym("unexpected '%s'", sym);
+					yy_error_sym("unexpected", sym);
 				}
 				if (sym != YY__RPAREN) {
-					yy_error_sym("')' expected, got '%s'", sym);
+					yy_error_sym("')' expected, got", sym);
 				}
 				sym = get_sym();
 				break;
@@ -3543,7 +3546,7 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 				sym = parse_type_specifier(sym, dcl);
 				break;
 			default:
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 		}
 	} while ((YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY___INLINE,YY___INLINE__,YY__NORETURN,YY___CDECL,YY___STDCALL,YY___FASTCALL,YY___THISCALL,YY__ALIGNAS,YY___ATTRIBUTE,YY___ATTRIBUTE__,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID), "\370\377\371\377\377\037\301\000\000\000\020\000")) && (sym != YY_ID || zend_ffi_is_typedef_name((const char*)yy_text, yy_pos - yy_text)));
 	return sym;
@@ -3558,7 +3561,7 @@ static int parse_specifier_qualifier_list(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
 			sym = parse_attributes(sym, dcl);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} while ((YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) && (sym != YY_ID || zend_ffi_is_typedef_name((const char*)yy_text, yy_pos - yy_text)));
 	return sym;
@@ -3571,7 +3574,7 @@ static int parse_type_qualifier_list(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
 			sym = parse_attributes(sym, dcl);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} while (YY_IN_SET(sym, (YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\037\000\000\300\000\000\000\000\000"));
 	return sym;
@@ -3586,7 +3589,7 @@ static int parse_type_qualifier(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___CONST__) {
 			sym = get_sym();
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		dcl->flags |= ZEND_FFI_DCL_CONST;
 		dcl->attr |= ZEND_FFI_ATTR_CONST;
@@ -3598,7 +3601,7 @@ static int parse_type_qualifier(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___RESTRICT__) {
 			sym = get_sym();
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		dcl->flags |= ZEND_FFI_DCL_RESTRICT;
 	} else if (sym == YY_VOLATILE || sym == YY___VOLATILE || sym == YY___VOLATILE__) {
@@ -3609,14 +3612,14 @@ static int parse_type_qualifier(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___VOLATILE__) {
 			sym = get_sym();
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		dcl->flags |= ZEND_FFI_DCL_VOLATILE;
 	} else if (sym == YY__ATOMIC) {
 		sym = get_sym();
 		dcl->flags |= ZEND_FFI_DCL_ATOMIC;
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -3694,7 +3697,7 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 			} else if (sym == YY___COMPLEX__) {
 				sym = get_sym();
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 			dcl->flags |= ZEND_FFI_DCL_COMPLEX;
 			break;
@@ -3715,7 +3718,7 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 			zend_ffi_resolve_typedef(name, name_len, dcl);
 			break;
 		default:
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -3728,7 +3731,7 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 		sym = get_sym();
 		dcl->flags |= ZEND_FFI_DCL_UNION;
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
 		sym = parse_attributes(sym, dcl);
@@ -3746,7 +3749,7 @@ static int parse_struct_or_union_specifier(int sym, zend_ffi_dcl *dcl) {
 		zend_ffi_make_struct_type(dcl);
 		sym = parse_struct_contents(sym, dcl);
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -3758,7 +3761,7 @@ static int parse_struct_contents(int sym, zend_ffi_dcl *dcl) {
 	int   save_line;
 	int alt2;
 	if (sym != YY__LBRACE) {
-		yy_error_sym("'{' expected, got '%s'", sym);
+		yy_error_sym("'{' expected, got", sym);
 	}
 	sym = get_sym();
 	if (YY_IN_SET(sym, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) {
@@ -3776,7 +3779,7 @@ static int parse_struct_contents(int sym, zend_ffi_dcl *dcl) {
 				alt2 = 6;
 				goto _yy_state_2;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_2_1:
 			if (YY_IN_SET(sym2, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) {
@@ -3786,7 +3789,7 @@ _yy_state_2_1:
 				alt2 = 5;
 				goto _yy_state_2;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_2:
 			yy_pos  = save_pos;
@@ -3803,7 +3806,7 @@ _yy_state_2:
 		}
 	}
 	if (sym != YY__RBRACE) {
-		yy_error_sym("'}' expected, got '%s'", sym);
+		yy_error_sym("'}' expected, got", sym);
 	}
 	sym = get_sym();
 	if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
@@ -3829,7 +3832,7 @@ static int parse_struct_declaration(int sym, zend_ffi_dcl *struct_dcl) {
 			sym = parse_struct_declarator(sym, struct_dcl, &field_dcl);
 		}
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -3853,21 +3856,21 @@ static int parse_struct_declarator(int sym, zend_ffi_dcl *struct_dcl, zend_ffi_d
 			}
 			zend_ffi_add_field(struct_dcl, name, name_len, field_dcl);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} else if (sym == YY__COLON) {
 		sym = get_sym();
 		sym = parse_constant_expression(sym, &bits);
 		zend_ffi_skip_bit_field(struct_dcl, &bits);
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
 
 static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 	if (sym != YY_ENUM) {
-		yy_error_sym("'enum' expected, got '%s'", sym);
+		yy_error_sym("'enum' expected, got", sym);
 	}
 	sym = get_sym();
 	dcl->flags |= ZEND_FFI_DCL_ENUM;
@@ -3883,7 +3886,7 @@ static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 			sym = get_sym();
 			sym = parse_enumerator_list(sym, dcl);
 			if (sym != YY__RBRACE) {
-				yy_error_sym("'}' expected, got '%s'", sym);
+				yy_error_sym("'}' expected, got", sym);
 			}
 			sym = get_sym();
 			if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
@@ -3892,21 +3895,21 @@ static int parse_enum_specifier(int sym, zend_ffi_dcl *dcl) {
 		} else if (YY_IN_SET(sym, (YY_TYPEDEF,YY_EXTERN,YY_STATIC,YY_AUTO,YY_REGISTER,YY_INLINE,YY___INLINE,YY___INLINE__,YY__NORETURN,YY___CDECL,YY___STDCALL,YY___FASTCALL,YY___THISCALL,YY__ALIGNAS,YY___ATTRIBUTE,YY___ATTRIBUTE__,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY__STAR,YY__LPAREN,YY__SEMICOLON,YY__COLON,YY__LBRACK,YY__RBRACE,YY__COMMA,YY__RPAREN,YY_EOF), "\377\377\377\377\377\337\315\000\000\000\020\000")) {
 			zend_ffi_declare_tag(name, name_len, dcl, 1);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} else if (sym == YY__LBRACE) {
 		sym = get_sym();
 		zend_ffi_make_enum_type(dcl);
 		sym = parse_enumerator_list(sym, dcl);
 		if (sym != YY__RBRACE) {
-			yy_error_sym("'}' expected, got '%s'", sym);
+			yy_error_sym("'}' expected, got", sym);
 		}
 		sym = get_sym();
 		if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
 			sym = parse_attributes(sym, dcl);
 		}
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -3932,7 +3935,7 @@ static int parse_enumerator_list(int sym, zend_ffi_dcl *enum_dcl) {
 			alt236 = -1;
 			goto _yy_state_236;
 		} else {
-			yy_error_sym("unexpected '%s'", sym2);
+			yy_error_sym("unexpected", sym2);
 		}
 _yy_state_236_1:
 		if (sym2 == YY_ID) {
@@ -3942,7 +3945,7 @@ _yy_state_236_1:
 			alt236 = 239;
 			goto _yy_state_236;
 		} else {
-			yy_error_sym("unexpected '%s'", sym2);
+			yy_error_sym("unexpected", sym2);
 		}
 _yy_state_236:
 		yy_pos  = save_pos;
@@ -3988,12 +3991,12 @@ static int parse_declarator(int sym, zend_ffi_dcl *dcl, const char **name, size_
 		}
 		sym = parse_declarator(sym, &nested_dcl, name, name_len);
 		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got '%s'", sym);
+			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
 		nested = 1;
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	if (sym == YY__LBRACK || sym == YY__LPAREN) {
 		sym = parse_array_or_function_declarators(sym, dcl);
@@ -4015,7 +4018,7 @@ static int parse_abstract_declarator(int sym, zend_ffi_dcl *dcl, const char **na
 		sym = parse_ID(sym, name, name_len);
 	} else if (YY_IN_SET(sym, (YY__LBRACK,YY__LPAREN,YY__COMMA,YY__RPAREN,YY_EOF), "\003\000\006\000\000\000\010\000\000\000\000\000")) {
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	if (sym == YY__LBRACK || sym == YY__LPAREN) {
 		sym = parse_array_or_function_declarators(sym, dcl);
@@ -4028,7 +4031,7 @@ static int parse_nested_abstract_declarator(int sym, zend_ffi_dcl *dcl, const ch
 	zend_ffi_dcl nested_dcl = {ZEND_FFI_DCL_CHAR, 0, 0, 0, NULL};
 	zend_bool nested = 0;
 	if (sym != YY__LPAREN) {
-		yy_error_sym("'(' expected, got '%s'", sym);
+		yy_error_sym("'(' expected, got", sym);
 	}
 	sym = get_sym();
 	if (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__) {
@@ -4043,7 +4046,7 @@ static int parse_nested_abstract_declarator(int sym, zend_ffi_dcl *dcl, const ch
 			sym = parse_ID(sym, name, name_len);
 		} else if (sym == YY__LBRACK || sym == YY__LPAREN || sym == YY__RPAREN) {
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		if (sym == YY__LBRACK || sym == YY__LPAREN) {
 			sym = parse_array_or_function_declarators(sym, dcl);
@@ -4063,13 +4066,13 @@ static int parse_nested_abstract_declarator(int sym, zend_ffi_dcl *dcl, const ch
 		} else if (sym == YY__LBRACK || sym == YY__LPAREN) {
 			sym = parse_array_or_function_declarators(sym, dcl);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	if (sym != YY__RPAREN) {
-		yy_error_sym("')' expected, got '%s'", sym);
+		yy_error_sym("')' expected, got", sym);
 	}
 	sym = get_sym();
 	if (nested) zend_ffi_nested_declaration(dcl, &nested_dcl);
@@ -4078,7 +4081,7 @@ static int parse_nested_abstract_declarator(int sym, zend_ffi_dcl *dcl, const ch
 
 static int parse_pointer(int sym, zend_ffi_dcl *dcl) {
 	if (sym != YY__STAR) {
-		yy_error_sym("'*' expected, got '%s'", sym);
+		yy_error_sym("'*' expected, got", sym);
 	}
 	do {
 		sym = get_sym();
@@ -4125,7 +4128,7 @@ static int parse_array_or_function_declarators(int sym, zend_ffi_dcl *dcl) {
 			alt103 = 114;
 			goto _yy_state_103;
 		} else {
-			yy_error_sym("unexpected '%s'", sym2);
+			yy_error_sym("unexpected", sym2);
 		}
 _yy_state_103_14:
 		if (sym2 == YY__RBRACK) {
@@ -4135,7 +4138,7 @@ _yy_state_103_14:
 			alt103 = 113;
 			goto _yy_state_103;
 		} else {
-			yy_error_sym("unexpected '%s'", sym2);
+			yy_error_sym("unexpected", sym2);
 		}
 _yy_state_103:
 		yy_pos  = save_pos;
@@ -4167,7 +4170,7 @@ _yy_state_103:
 				alt107 = 114;
 				goto _yy_state_107;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_107_2:
 			if (sym2 == YY__RBRACK) {
@@ -4177,7 +4180,7 @@ _yy_state_107_2:
 				alt107 = 111;
 				goto _yy_state_107;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_107:
 			yy_pos  = save_pos;
@@ -4194,7 +4197,7 @@ _yy_state_107:
 			} else if (alt107 == 111) {
 				sym = parse_assignment_expression(sym, &len);
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 		} else if (alt103 == 114 || alt103 == 112 || alt103 == 113) {
 			if (alt103 == 114) {
@@ -4205,13 +4208,13 @@ _yy_state_107:
 			} else if (alt103 == 113) {
 				sym = parse_assignment_expression(sym, &len);
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		if (sym != YY__RBRACK) {
-			yy_error_sym("']' expected, got '%s'", sym);
+			yy_error_sym("']' expected, got", sym);
 		}
 		sym = get_sym();
 		if (sym == YY__LBRACK || sym == YY__LPAREN) {
@@ -4237,7 +4240,7 @@ _yy_state_107:
 						alt117 = 123;
 						goto _yy_state_117;
 					} else {
-						yy_error_sym("unexpected '%s'", sym2);
+						yy_error_sym("unexpected", sym2);
 					}
 _yy_state_117_1:
 					if (YY_IN_SET(sym2, (YY_VOID,YY_CHAR,YY_SHORT,YY_INT,YY_LONG,YY_FLOAT,YY_DOUBLE,YY_SIGNED,YY_UNSIGNED,YY__BOOL,YY__COMPLEX,YY_COMPLEX,YY___COMPLEX,YY___COMPLEX__,YY_STRUCT,YY_UNION,YY_ENUM,YY_ID,YY_CONST,YY___CONST,YY___CONST__,YY_RESTRICT,YY___RESTICT,YY___RESTRICT__,YY_VOLATILE,YY___VOLATILE,YY___VOLATILE__,YY__ATOMIC,YY___ATTRIBUTE,YY___ATTRIBUTE__), "\000\000\370\377\377\037\301\000\000\000\020\000")) {
@@ -4247,7 +4250,7 @@ _yy_state_117_1:
 						alt117 = 120;
 						goto _yy_state_117;
 					} else {
-						yy_error_sym("unexpected '%s'", sym2);
+						yy_error_sym("unexpected", sym2);
 					}
 _yy_state_117:
 					yy_pos  = save_pos;
@@ -4262,7 +4265,7 @@ _yy_state_117:
 				if (alt117 == 120) {
 					sym = get_sym();
 					if (sym != YY__POINT_POINT_POINT) {
-						yy_error_sym("'...' expected, got '%s'", sym);
+						yy_error_sym("'...' expected, got", sym);
 					}
 					sym = get_sym();
 					attr |= ZEND_FFI_ATTR_VARIADIC;
@@ -4271,11 +4274,11 @@ _yy_state_117:
 				sym = get_sym();
 				attr |= ZEND_FFI_ATTR_VARIADIC;
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 		}
 		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got '%s'", sym);
+			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
 		if (sym == YY__LBRACK || sym == YY__LPAREN) {
@@ -4284,7 +4287,7 @@ _yy_state_117:
 		dcl->attr |= attr;
 		zend_ffi_make_func_type(dcl, args);
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -4317,14 +4320,14 @@ static int parse_attributes(int sym, zend_ffi_dcl *dcl) {
 		} else if (sym == YY___ATTRIBUTE__) {
 			sym = get_sym();
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 		if (sym != YY__LPAREN) {
-			yy_error_sym("'(' expected, got '%s'", sym);
+			yy_error_sym("'(' expected, got", sym);
 		}
 		sym = get_sym();
 		if (sym != YY__LPAREN) {
-			yy_error_sym("'(' expected, got '%s'", sym);
+			yy_error_sym("'(' expected, got", sym);
 		}
 		sym = get_sym();
 		sym = parse_attrib(sym, dcl);
@@ -4333,11 +4336,11 @@ static int parse_attributes(int sym, zend_ffi_dcl *dcl) {
 			sym = parse_attrib(sym, dcl);
 		}
 		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got '%s'", sym);
+			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
 		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got '%s'", sym);
+			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
 	} while (sym == YY___ATTRIBUTE || sym == YY___ATTRIBUTE__);
@@ -4364,11 +4367,11 @@ static int parse_attrib(int sym, zend_ffi_dcl *dcl) {
 				zend_ffi_add_attribute_value(dcl, name, name_len, ++n, &val);
 			}
 			if (sym != YY__RPAREN) {
-				yy_error_sym("')' expected, got '%s'", sym);
+				yy_error_sym("')' expected, got", sym);
 			}
 			sym = get_sym();
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4382,7 +4385,7 @@ static int parse_initializer(int sym) {
 	int alt329;
 	zend_ffi_val dummy;
 	if (sym != YY__EQUAL) {
-		yy_error_sym("'=' expected, got '%s'", sym);
+		yy_error_sym("'=' expected, got", sym);
 	}
 	sym = get_sym();
 	if (YY_IN_SET(sym, (YY__LPAREN,YY_ID,YY_OCTNUMBER,YY_DECNUMBER,YY_HEXNUMBER,YY_FLOATNUMBER,YY_STRING,YY_CHARACTER,YY__PLUS_PLUS,YY__MINUS_MINUS,YY__AND,YY__STAR,YY__PLUS,YY__MINUS,YY__TILDE,YY__BANG,YY_SIZEOF,YY__ALIGNOF,YY___ALIGNOF,YY___ALIGNOF__), "\000\000\002\000\000\000\004\100\200\361\377\007")) {
@@ -4406,7 +4409,7 @@ static int parse_initializer(int sym) {
 				alt329 = 334;
 				goto _yy_state_329;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_329_1:
 			if (sym2 == YY__LBRACK || sym2 == YY__POINT || sym2 == YY__EQUAL) {
@@ -4416,7 +4419,7 @@ _yy_state_329_1:
 				alt329 = 333;
 				goto _yy_state_329;
 			} else {
-				yy_error_sym("unexpected '%s'", sym2);
+				yy_error_sym("unexpected", sym2);
 			}
 _yy_state_329:
 			yy_pos  = save_pos;
@@ -4435,11 +4438,11 @@ _yy_state_329:
 			sym = get_sym();
 		}
 		if (sym != YY__RBRACE) {
-			yy_error_sym("'}' expected, got '%s'", sym);
+			yy_error_sym("'}' expected, got", sym);
 		}
 		sym = get_sym();
 	} else {
-		yy_error_sym("unexpected '%s'", sym);
+		yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
@@ -4453,18 +4456,18 @@ static int parse_designation(int sym) {
 			sym = get_sym();
 			sym = parse_constant_expression(sym, &dummy);
 			if (sym != YY__RBRACK) {
-				yy_error_sym("']' expected, got '%s'", sym);
+				yy_error_sym("']' expected, got", sym);
 			}
 			sym = get_sym();
 		} else if (sym == YY__POINT) {
 			sym = get_sym();
 			sym = parse_ID(sym, &name, &name_len);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	} while (sym == YY__LBRACK || sym == YY__POINT);
 	if (sym != YY__EQUAL) {
-		yy_error_sym("'=' expected, got '%s'", sym);
+		yy_error_sym("'=' expected, got", sym);
 	}
 	sym = get_sym();
 	return sym;
@@ -4506,7 +4509,7 @@ static int parse_conditional_expression(int sym, zend_ffi_val *val) {
 		sym = get_sym();
 		sym = parse_expression(sym, &op2);
 		if (sym != YY__COLON) {
-			yy_error_sym("':' expected, got '%s'", sym);
+			yy_error_sym("':' expected, got", sym);
 		}
 		sym = get_sym();
 		sym = parse_conditional_expression(sym, &op3);
@@ -4583,7 +4586,7 @@ static int parse_equality_expression(int sym, zend_ffi_val *val) {
 			sym = parse_relational_expression(sym, &op2);
 			zend_ffi_expr_is_not_equal(val, &op2);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4610,7 +4613,7 @@ static int parse_relational_expression(int sym, zend_ffi_val *val) {
 			sym = parse_shift_expression(sym, &op2);
 			zend_ffi_expr_is_greater_or_equal(val, &op2);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4629,7 +4632,7 @@ static int parse_shift_expression(int sym, zend_ffi_val *val) {
 			sym = parse_additive_expression(sym, &op2);
 			zend_ffi_expr_shift_right(val, &op2);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4648,7 +4651,7 @@ static int parse_additive_expression(int sym, zend_ffi_val *val) {
 			sym = parse_multiplicative_expression(sym, &op2);
 			zend_ffi_expr_sub(val, &op2);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4671,7 +4674,7 @@ static int parse_multiplicative_expression(int sym, zend_ffi_val *val) {
 			sym = parse_cast_expression(sym, &op2);
 			zend_ffi_expr_mod(val, &op2);
 		} else {
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 		}
 	}
 	return sym;
@@ -4684,7 +4687,7 @@ static int parse_cast_expression(int sym, zend_ffi_val *val) {
 		sym = get_sym();
 		sym = parse_type_name(sym, &dcl);
 		if (sym != YY__RPAREN) {
-			yy_error_sym("')' expected, got '%s'", sym);
+			yy_error_sym("')' expected, got", sym);
 		}
 		sym = get_sym();
 		do_cast = 1;
@@ -4708,7 +4711,7 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 						sym = get_sym();
 						sym = parse_expr_list(sym);
 						if (sym != YY__RBRACK) {
-							yy_error_sym("']' expected, got '%s'", sym);
+							yy_error_sym("']' expected, got", sym);
 						}
 						sym = get_sym();
 						break;
@@ -4718,7 +4721,7 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 							sym = parse_expr_list(sym);
 						}
 						if (sym != YY__RPAREN) {
-							yy_error_sym("')' expected, got '%s'", sym);
+							yy_error_sym("')' expected, got", sym);
 						}
 						sym = get_sym();
 						break;
@@ -4737,7 +4740,7 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 						sym = get_sym();
 						break;
 					default:
-						yy_error_sym("unexpected '%s'", sym);
+						yy_error_sym("unexpected", sym);
 				}
 				zend_ffi_val_error(val);
 			}
@@ -4764,7 +4767,7 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 			sym = get_sym();
 			sym = parse_expression(sym, val);
 			if (sym != YY__RPAREN) {
-				yy_error_sym("')' expected, got '%s'", sym);
+				yy_error_sym("')' expected, got", sym);
 			}
 			sym = get_sym();
 			break;
@@ -4814,7 +4817,7 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 				sym = get_sym();
 				sym = parse_type_name(sym, &dcl);
 				if (sym != YY__RPAREN) {
-					yy_error_sym("')' expected, got '%s'", sym);
+					yy_error_sym("')' expected, got", sym);
 				}
 				sym = get_sym();
 				zend_ffi_expr_sizeof_type(val, &dcl);
@@ -4822,18 +4825,18 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 				sym = parse_unary_expression(sym, val);
 				zend_ffi_expr_sizeof_val(val);
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 			break;
 		case YY__ALIGNOF:
 			sym = get_sym();
 			if (sym != YY__LPAREN) {
-				yy_error_sym("'(' expected, got '%s'", sym);
+				yy_error_sym("'(' expected, got", sym);
 			}
 			sym = get_sym();
 			sym = parse_type_name(sym, &dcl);
 			if (sym != YY__RPAREN) {
-				yy_error_sym("')' expected, got '%s'", sym);
+				yy_error_sym("')' expected, got", sym);
 			}
 			sym = get_sym();
 			zend_ffi_expr_alignof_type(val, &dcl);
@@ -4845,13 +4848,13 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 			} else if (sym == YY___ALIGNOF__) {
 				sym = get_sym();
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 			if ((sym == YY__LPAREN) && synpred_7(sym)) {
 				sym = get_sym();
 				sym = parse_type_name(sym, &dcl);
 				if (sym != YY__RPAREN) {
-					yy_error_sym("')' expected, got '%s'", sym);
+					yy_error_sym("')' expected, got", sym);
 				}
 				sym = get_sym();
 				zend_ffi_expr_alignof_type(val, &dcl);
@@ -4859,18 +4862,18 @@ static int parse_unary_expression(int sym, zend_ffi_val *val) {
 				sym = parse_unary_expression(sym, val);
 				zend_ffi_expr_alignof_val(val);
 			} else {
-				yy_error_sym("unexpected '%s'", sym);
+				yy_error_sym("unexpected", sym);
 			}
 			break;
 		default:
-			yy_error_sym("unexpected '%s'", sym);
+			yy_error_sym("unexpected", sym);
 	}
 	return sym;
 }
 
 static int parse_ID(int sym, const char **name, size_t *name_len) {
 	if (sym != YY_ID) {
-		yy_error_sym("<ID> expected, got '%s'", sym);
+		yy_error_sym("<ID> expected, got", sym);
 	}
 	*name = (const char*)yy_text; *name_len = yy_pos - yy_text;
 	sym = get_sym();
@@ -4879,7 +4882,7 @@ static int parse_ID(int sym, const char **name, size_t *name_len) {
 
 static int parse_OCTNUMBER(int sym, zend_ffi_val *val) {
 	if (sym != YY_OCTNUMBER) {
-		yy_error_sym("<OCTNUMBER> expected, got '%s'", sym);
+		yy_error_sym("<OCTNUMBER> expected, got", sym);
 	}
 	zend_ffi_val_number(val, 8, (const char*)yy_text, yy_pos - yy_text);
 	sym = get_sym();
@@ -4888,7 +4891,7 @@ static int parse_OCTNUMBER(int sym, zend_ffi_val *val) {
 
 static int parse_DECNUMBER(int sym, zend_ffi_val *val) {
 	if (sym != YY_DECNUMBER) {
-		yy_error_sym("<DECNUMBER> expected, got '%s'", sym);
+		yy_error_sym("<DECNUMBER> expected, got", sym);
 	}
 	zend_ffi_val_number(val, 10, (const char*)yy_text, yy_pos - yy_text);
 	sym = get_sym();
@@ -4897,7 +4900,7 @@ static int parse_DECNUMBER(int sym, zend_ffi_val *val) {
 
 static int parse_HEXNUMBER(int sym, zend_ffi_val *val) {
 	if (sym != YY_HEXNUMBER) {
-		yy_error_sym("<HEXNUMBER> expected, got '%s'", sym);
+		yy_error_sym("<HEXNUMBER> expected, got", sym);
 	}
 	zend_ffi_val_number(val, 16, (const char*)yy_text + 2, yy_pos - yy_text - 2);
 	sym = get_sym();
@@ -4906,7 +4909,7 @@ static int parse_HEXNUMBER(int sym, zend_ffi_val *val) {
 
 static int parse_FLOATNUMBER(int sym, zend_ffi_val *val) {
 	if (sym != YY_FLOATNUMBER) {
-		yy_error_sym("<FLOATNUMBER> expected, got '%s'", sym);
+		yy_error_sym("<FLOATNUMBER> expected, got", sym);
 	}
 	zend_ffi_val_float_number(val, (const char*)yy_text, yy_pos - yy_text);
 	sym = get_sym();
@@ -4915,7 +4918,7 @@ static int parse_FLOATNUMBER(int sym, zend_ffi_val *val) {
 
 static int parse_STRING(int sym, zend_ffi_val *val) {
 	if (sym != YY_STRING) {
-		yy_error_sym("<STRING> expected, got '%s'", sym);
+		yy_error_sym("<STRING> expected, got", sym);
 	}
 	zend_ffi_val_string(val, (const char*)yy_text, yy_pos - yy_text);
 	sym = get_sym();
@@ -4924,7 +4927,7 @@ static int parse_STRING(int sym, zend_ffi_val *val) {
 
 static int parse_CHARACTER(int sym, zend_ffi_val *val) {
 	if (sym != YY_CHARACTER) {
-		yy_error_sym("<CHARACTER> expected, got '%s'", sym);
+		yy_error_sym("<CHARACTER> expected, got", sym);
 	}
 	zend_ffi_val_character(val, (const char*)yy_text, yy_pos - yy_text);
 	sym = get_sym();
@@ -4938,7 +4941,7 @@ static void parse(void) {
 	yy_line = 1;
 	sym = parse_declarations(get_sym());
 	if (sym != YY_EOF) {
-		yy_error_sym("<EOF> expected, got '%s'", sym);
+		yy_error_sym("<EOF> expected, got", sym);
 	}
 }
 
