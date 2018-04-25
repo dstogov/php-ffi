@@ -1483,8 +1483,8 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 	uint32_t n, arg_count;
 	ffi_arg ret;
 	zend_ffi_type *arg_type;
-	ALLOCA_FLAG(arg_types_use_heap)
-	ALLOCA_FLAG(arg_values_use_heap)
+	ALLOCA_FLAG(arg_types_use_heap = 0)
+	ALLOCA_FLAG(arg_values_use_heap = 0)
 
 	ZEND_ASSERT(type->kind == ZEND_FFI_TYPE_FUNC);
 	arg_count = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
@@ -2095,7 +2095,7 @@ ZEND_METHOD(FFI, alignof) /* {{{ */
 
 ZEND_METHOD(FFI, memcpy) /* {{{ */
 {
-	zval *zv1, *zv2;
+	zval *zv1, *zv2 = NULL;
 	zend_ffi_cdata *cdata1, *cdata2;
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
@@ -2149,7 +2149,7 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 
 ZEND_METHOD(FFI, memcmp) /* {{{ */
 {
-	zval *zv1, *zv2;
+	zval *zv1 = NULL, *zv2 = NULL;
 	zend_ffi_cdata *cdata1, *cdata2;
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
@@ -2880,7 +2880,7 @@ static int zend_ffi_validate_field_type(zend_ffi_type *type, zend_ffi_type *pare
 void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_len, zend_ffi_dcl *field_dcl) /* {{{ */
 {
 	if (!FFI_G(error)) {
-		zend_ffi_field *field;
+		zend_ffi_field *field = NULL;
 		zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
 		zend_ffi_type *field_type;
 
