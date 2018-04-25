@@ -191,7 +191,6 @@ void zend_ffi_make_struct_type(zend_ffi_dcl *dcl);
 void zend_ffi_add_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_len, zend_ffi_dcl *field_dcl);
 void zend_ffi_add_anonymous_field(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl);
 void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t name_len, zend_ffi_dcl *field_dcl, zend_ffi_val *bits);
-void zend_ffi_skip_bit_field(zend_ffi_dcl *struct_dcl, zend_ffi_val *bits);
 void zend_ffi_adjust_struct_size(zend_ffi_dcl *dcl);
 void zend_ffi_make_pointer_type(zend_ffi_dcl *dcl);
 void zend_ffi_make_array_type(zend_ffi_dcl *dcl, zend_ffi_val *len);

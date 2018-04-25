@@ -706,8 +706,13 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 		}
 	}
 
-	ptr = (void*)(((char*)cdata->ptr) + field->offset);
-	if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv, cdata->is_const | field->is_const) != SUCCESS) {
+	if (!field->bits) {
+		ptr = (void*)(((char*)cdata->ptr) + field->offset);
+		if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv, cdata->is_const | field->is_const) != SUCCESS) {
+			return &EG(uninitialized_zval);
+		}
+	} else {
+		// TODO: read bit-field ???
 		return &EG(uninitialized_zval);
 	}
 
@@ -760,8 +765,12 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		return;
 	}
 
-	ptr = (void*)(((char*)cdata->ptr) + field->offset);
-	zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
+	if (!field->bits) {
+		ptr = (void*)(((char*)cdata->ptr) + field->offset);
+		zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
+	} else {
+		// TODO: write bit-field ???
+	}
 }
 /* }}} */
 
@@ -1028,9 +1037,15 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 		case ZEND_FFI_TYPE_STRUCT:
 			ht = zend_new_array(zend_hash_num_elements(&type->record.fields));
 			ZEND_HASH_FOREACH_STR_KEY_PTR(&type->record.fields, key, f) {
-				void *f_ptr = (void*)(((char*)ptr) + f->offset);
-				if (zend_ffi_cdata_to_zval(NULL, f_ptr, ZEND_FFI_TYPE(f->type), BP_VAR_R, &tmp, 1) == SUCCESS) {
-					zend_hash_add(ht, key, &tmp);
+				if (key) {
+					if (!f->bits) {
+						void *f_ptr = (void*)(((char*)ptr) + f->offset);
+						if (zend_ffi_cdata_to_zval(NULL, f_ptr, ZEND_FFI_TYPE(f->type), BP_VAR_R, &tmp, 1) == SUCCESS) {
+							zend_hash_add(ht, key, &tmp);
+						}
+					} else {
+						// TODO: read bit-field ???
+					}
 				}
 			} ZEND_HASH_FOREACH_END();
 			*is_temp = 1;
@@ -2976,16 +2991,20 @@ void zend_ffi_add_anonymous_field(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_
 		}
 		new_field->type = field->type;
 		new_field->is_const = field->is_const;
-		new_field->is_nested = 0;
-		new_field->first_bit = 0;
-		new_field->bits = 0;
+		new_field->is_nested = 1;
+		new_field->first_bit = field->first_bit;
+		new_field->bits = field->bits;
 		field->type = ZEND_FFI_TYPE(field->type); /* reset "owned" flag */
 
-		if (!zend_hash_add_ptr(&struct_type->record.fields, key, new_field)) {
-			zend_ffi_type_dtor(new_field->type);
-			efree(new_field);
-			zend_ffi_parser_error("duplicate field name '%s' at line %d", ZSTR_VAL(key), FFI_G(line));
-			return;
+		if (key) {
+			if (!zend_hash_add_ptr(&struct_type->record.fields, key, new_field)) {
+				zend_ffi_type_dtor(new_field->type);
+				efree(new_field);
+				zend_ffi_parser_error("duplicate field name '%s' at line %d", ZSTR_VAL(key), FFI_G(line));
+				return;
+			}
+		} else {
+			zend_hash_next_index_insert_ptr(&struct_type->record.fields, field);
 		}
 	} ZEND_HASH_FOREACH_END();
 
@@ -3004,6 +3023,7 @@ void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t n
 {
 	zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
 	zend_ffi_type *field_type;
+	zend_ffi_field *field;
 
 	ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
 	zend_ffi_finalize_type(field_dcl);
@@ -3015,26 +3035,89 @@ void zend_ffi_add_bit_field(zend_ffi_dcl *struct_dcl, const char *name, size_t n
 
 	if (field_type->kind < ZEND_FFI_TYPE_UINT8 || field_type->kind > ZEND_FFI_TYPE_BOOL) {
 		zend_ffi_cleanup_dcl(field_dcl);
-		zend_ffi_parser_error("wrong type of bit field '%.*s' at line %d", name_len, name, FFI_G(line));
+		zend_ffi_parser_error("wrong type of bit field '%.*s' at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
 	}
 
-	/* TODO: bit fields ??? */
-//	zend_spprintf(&FFI_G(error), 0, "bit fields are not supported at line %d", FFI_G(line));
-}
-/* }}} */
-
-void zend_ffi_skip_bit_field(zend_ffi_dcl *struct_dcl, zend_ffi_val *bits) /* {{{ */
-{
-	zend_ffi_type *struct_type = ZEND_FFI_TYPE(struct_dcl->type);
-
-	ZEND_ASSERT(struct_type && struct_type->kind == ZEND_FFI_TYPE_STRUCT);
-
-	if (zend_ffi_validate_prev_field_type(struct_type) != SUCCESS) {
-		LONGJMP(FFI_G(bailout), FAILURE);
+	if (bits->kind == ZEND_FFI_VAL_INT32 || ZEND_FFI_VAL_INT64) {
+		if (bits->i64 < 0) {
+			zend_ffi_cleanup_dcl(field_dcl);
+			zend_ffi_parser_error("negative width in bit-field '%.*s' at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
+		} else if (bits->i64 == 0) {
+			zend_ffi_cleanup_dcl(field_dcl);
+			if (name) {
+				zend_ffi_parser_error("zero width in bit-field '%.*s' at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
+			}
+			return;
+		} else if (bits->i64 > field_type->size * 8) {
+			zend_ffi_cleanup_dcl(field_dcl);
+			zend_ffi_parser_error("width of '%.*s' exceeds its type at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
+		}
+	} else if (ZEND_FFI_VAL_UINT32 || ZEND_FFI_VAL_UINT64) {
+		if (bits->u64 == 0) {
+			zend_ffi_cleanup_dcl(field_dcl);
+			if (name) {
+				zend_ffi_parser_error("zero width in bit-field '%.*s' at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
+			}
+			return;
+		} else if (bits->u64 > field_type->size * 8) {
+			zend_ffi_cleanup_dcl(field_dcl);
+			zend_ffi_parser_error("width of '%.*s' exceeds its type at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
+		}
+	} else {
+		zend_ffi_cleanup_dcl(field_dcl);
+		zend_ffi_parser_error("bit field '%.*s' width not an integer constant at line %d", name ? name_len : sizeof("<anonymous>")-1, name ? name : "<anonymous>", FFI_G(line));
 	}
 
-	/* TODO: bit fields ??? */
-//	zend_spprintf(&FFI_G(error), 0, "bit fields are not supported at line %d", FFI_G(line));
+	field = emalloc(sizeof(zend_ffi_field));
+	if (!(struct_type->attr & ZEND_FFI_ATTR_PACKED)) {
+		struct_type->align = MAX(struct_type->align, sizeof(uint32_t));
+	}
+	if (struct_type->attr & ZEND_FFI_ATTR_UNION) {
+		field->offset = 0;
+		field->first_bit = 0;
+		field->bits = bits->u64;
+		if (struct_type->attr & ZEND_FFI_ATTR_PACKED) {
+			struct_type->size = MAX(struct_type->size, (bits->u64 + 7) / 8);
+		} else {
+			struct_type->size = MAX(struct_type->size, ((bits->u64 + 31) / 32) * 4);
+		}
+	} else {
+		zend_ffi_field *prev_field = NULL;
+
+		if (zend_hash_num_elements(&struct_type->record.fields) > 0) {
+			ZEND_HASH_REVERSE_FOREACH_PTR(&struct_type->record.fields, prev_field) {
+				break;
+			} ZEND_HASH_FOREACH_END();
+		}
+		if (prev_field && prev_field->bits) {
+			field->offset = prev_field->offset;
+			field->first_bit = prev_field->first_bit + prev_field->bits;
+			field->bits = bits->u64;
+		} else {
+			field->offset = struct_type->size;
+			field->first_bit = 0;
+			field->bits = bits->u64;
+		}
+		if (struct_type->attr & ZEND_FFI_ATTR_PACKED) {
+			struct_type->size = field->offset + ((field->first_bit + field->bits) + 7) / 8;
+		} else {
+			struct_type->size = field->offset + (((field->first_bit + field->bits) + 31) / 32) * 4;
+		}
+	}
+	field->type = field_dcl->type;
+	field->is_const = (field_dcl->attr & ZEND_FFI_ATTR_CONST) != 0;
+	field->is_nested = 0;
+	field_dcl->type = field_type; /* reset "owned" flag */
+
+	if (name) {
+		if (!zend_hash_str_add_ptr(&struct_type->record.fields, name, name_len, field)) {
+			zend_ffi_type_dtor(field->type);
+			efree(field);
+			zend_ffi_parser_error("duplicate field name '%.*s' at line %d", name_len, name, FFI_G(line));
+		}
+	} else {
+		zend_hash_next_index_insert_ptr(&struct_type->record.fields, field);
+	}
 }
 /* }}} */
 

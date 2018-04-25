@@ -3857,7 +3857,7 @@ static int parse_struct_declarator(int sym, zend_ffi_dcl *struct_dcl, zend_ffi_d
 	} else if (sym == YY__COLON) {
 		sym = get_sym();
 		sym = parse_constant_expression(sym, &bits);
-		zend_ffi_skip_bit_field(struct_dcl, &bits);
+		zend_ffi_add_bit_field(struct_dcl, NULL, 0, field_dcl, &bits);
 	} else {
 		yy_error_sym("unexpected", sym);
 	}

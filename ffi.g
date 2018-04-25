@@ -291,7 +291,7 @@ struct_declarator(zend_ffi_dcl *struct_dcl, zend_ffi_dcl *field_dcl):
 		)
 	|	":"
 		constant_expression(&bits)
-		{zend_ffi_skip_bit_field(struct_dcl, &bits);}
+		{zend_ffi_add_bit_field(struct_dcl, NULL, 0, field_dcl, &bits);}
 	)
 ;
 
@@ -459,7 +459,7 @@ parameter_declaration(HashTable **args):
 	{zend_ffi_dcl param_dcl = {0, 0, 0, 0, NULL};}
 	specifier_qualifier_list(&param_dcl)
 	abstract_declarator(&param_dcl, &name, &name_len)
-	/*attributes(&param_dcl)?*/
+	/*attributes(&param_dcl)? conflict ???*/
 	{zend_ffi_add_arg(args, name, name_len, &param_dcl);}
 	{FFI_G(allow_vla) = old_allow_vla;}
 ;
