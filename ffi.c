@@ -3667,7 +3667,7 @@ void zend_ffi_nested_declaration(zend_ffi_dcl *dcl, zend_ffi_dcl *nested_dcl) /*
 {
 	/* "char" is used as a terminator of nested declaration */
 	zend_ffi_finalize_type(dcl);
-	if (nested_dcl->type == &zend_ffi_type_char) {
+	if (!nested_dcl->type || nested_dcl->type == &zend_ffi_type_char) {
 		nested_dcl->type = dcl->type;
 	} else {
 		if (zend_ffi_nested_type(dcl->type, nested_dcl->type) != SUCCESS) {

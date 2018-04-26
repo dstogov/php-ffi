@@ -1635,11 +1635,11 @@ _yy_state_error:
 		return accept;
 	}
 	if (YYPOS >= YYEND) {
-		yy_error("Unexpected <EOF>");
+		yy_error("unexpected <EOF>");
 	} else if (YYPOS == yy_text) {
-		yy_error("Unexpected character 'escape_char(ch)'");
+		yy_error("unexpected character 'escape_char(ch)'");
 	} else {
-		yy_error("Unexpected sequence 'escape_string(yy_text, 1 + YYPOS - yy_text))'");
+		yy_error("unexpected sequence 'escape_string(yy_text, 1 + YYPOS - yy_text))'");
 	}
 	YYPOS++;
 	goto _yy_state_start;
@@ -3425,27 +3425,27 @@ static int parse_declaration_specifiers(int sym, zend_ffi_dcl *dcl) {
 	do {
 		switch (sym) {
 			case YY_TYPEDEF:
-				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("unexpected", sym);
 				sym = get_sym();
 				dcl->flags |= ZEND_FFI_DCL_TYPEDEF;
 				break;
 			case YY_EXTERN:
-				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("unexpected", sym);
 				sym = get_sym();
 				dcl->flags |= ZEND_FFI_DCL_EXTERN;
 				break;
 			case YY_STATIC:
-				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("unexpected", sym);
 				sym = get_sym();
 				dcl->flags |= ZEND_FFI_DCL_STATIC;
 				break;
 			case YY_AUTO:
-				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("unexpected", sym);
 				sym = get_sym();
 				dcl->flags |= ZEND_FFI_DCL_AUTO;
 				break;
 			case YY_REGISTER:
-				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & ZEND_FFI_DCL_STORAGE_CLASS) yy_error_sym("unexpected", sym);
 				sym = get_sym();
 				dcl->flags |= ZEND_FFI_DCL_REGISTER;
 				break;
@@ -3625,57 +3625,57 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 	size_t name_len;
 	switch (sym) {
 		case YY_VOID:
-			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_VOID;
 			break;
 		case YY_CHAR:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_CHAR;
 			break;
 		case YY_SHORT:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_SHORT;
 			break;
 		case YY_INT:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_INT;
 			break;
 		case YY_LONG:
 			if (dcl->flags & ZEND_FFI_DCL_LONG) {
-				if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT))) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT))) yy_error_sym("unexpected", sym);
 				dcl->flags |= ZEND_FFI_DCL_LONG_LONG;
 			} else {
-				if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT|ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_COMPLEX))) yy_error_sym("Unexpected '%s'", sym);
+				if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_SIGNED|ZEND_FFI_DCL_UNSIGNED|ZEND_FFI_DCL_INT|ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_COMPLEX))) yy_error_sym("unexpected", sym);
 				dcl->flags |= ZEND_FFI_DCL_LONG;
 			}
 			sym = get_sym();
 			break;
 		case YY_FLOAT:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_COMPLEX))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_COMPLEX))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_FLOAT;
 			break;
 		case YY_DOUBLE:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_COMPLEX))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_COMPLEX))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_DOUBLE;
 			break;
 		case YY_SIGNED:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_INT))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_INT))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_SIGNED;
 			break;
 		case YY_UNSIGNED:
-			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_INT))) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_CHAR|ZEND_FFI_DCL_SHORT|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_LONG_LONG|ZEND_FFI_DCL_INT))) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_UNSIGNED;
 			break;
 		case YY__BOOL:
-			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);
 			sym = get_sym();
 			dcl->flags |= ZEND_FFI_DCL_BOOL;
 			break;
@@ -3699,15 +3699,15 @@ static int parse_type_specifier(int sym, zend_ffi_dcl *dcl) {
 			break;
 		case YY_STRUCT:
 		case YY_UNION:
-			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);
 			sym = parse_struct_or_union_specifier(sym, dcl);
 			break;
 		case YY_ENUM:
-			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);
 			sym = parse_enum_specifier(sym, dcl);
 			break;
 		case YY_ID:
-			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("Unexpected '%s'", sym);
+			if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);
 			/*redeclaration of '%.*s' ??? */
 			sym = parse_ID(sym, &name, &name_len);
 			dcl->flags |= ZEND_FFI_DCL_TYPEDEF_NAME;
@@ -4963,7 +4963,7 @@ int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl) {
 		yy_line = 1;
 		sym = parse_type_name(get_sym(), dcl);
 		if (sym != YY_EOF) {
-			yy_error_sym("<EOF> expected, got '%s'", sym);
+			yy_error_sym("<EOF> expected, got", sym);
 		}
 		zend_ffi_validate_type_name(dcl);
 		return SUCCESS;
