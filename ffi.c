@@ -349,6 +349,62 @@ again:
 }
 /* }}} */
 
+static void zend_ffi_bit_field_to_zval(void *ptr, zend_ffi_field *field, zval *rv) /* {{{ */
+{
+	uint64_t *p1 = (uint64_t *)((char*)ptr + (field->first_bit / 64) * 8);
+	uint64_t *p2 = (uint64_t *)((char*)ptr + ((field->first_bit + field->bits - 1) / 64) * 8);
+	uint64_t pos = field->first_bit % 64;
+	uint64_t shift = 64 - (field->bits % 64);
+	uint64_t val;
+
+	if (p1 == p2) {
+		if (field->bits == 64) {
+			val = *p1;
+			shift = 0;
+		} else {
+			val = *p1 << (shift - pos);
+		}
+	} else {
+		val = (*p1 >> pos) | (*p2 << (64 - pos));
+	}
+	if (ZEND_FFI_TYPE(field->type)->kind == ZEND_FFI_TYPE_CHAR
+	 || ZEND_FFI_TYPE(field->type)->kind == ZEND_FFI_TYPE_SINT8
+	 || ZEND_FFI_TYPE(field->type)->kind == ZEND_FFI_TYPE_SINT16
+	 || ZEND_FFI_TYPE(field->type)->kind == ZEND_FFI_TYPE_SINT32
+	 || ZEND_FFI_TYPE(field->type)->kind == ZEND_FFI_TYPE_SINT64) {
+		val = (int64_t)val >> shift;
+	} else {
+		val = val >> shift;
+	}
+	ZVAL_LONG(rv, val);
+}
+/* }}} */
+
+static int zend_ffi_zval_to_bit_field(void *ptr, zend_ffi_field *field, zval *value) /* {{{ */
+{
+	uint64_t *p1 = (uint64_t *)((char*)ptr + (field->first_bit / 64) * 8);
+	uint64_t *p2 = (uint64_t *)((char*)ptr + ((field->first_bit + field->bits - 1) / (8 * 8)) * 8);
+	uint64_t pos = field->first_bit % 64;
+	uint64_t mask;
+	uint64_t val = zval_get_long(value);
+
+	if (p1 == p2) {
+		if (field->bits == 64) {
+			*p1 = val;
+		} else {
+			mask = ((1ULL << field->bits) - 1ULL) << pos;
+			*p1 = (*p1 & ~mask) | (val << pos) & mask;
+		}
+	} else {
+		mask = ((1ULL << (64 - pos)) - 1ULL) << pos;
+		*p1 = (*p1 & ~mask) | (val << pos) & mask;
+		mask = (1ULL << pos) - 1ULL;
+		*p2 = (*p2 & ~mask) | (val >> (64 - pos)) & mask;
+	}
+	return SUCCESS;
+}
+/* }}} */
+
 #if FFI_CLOSURES
 typedef struct _zend_ffi_callback_data {
 	zend_fcall_info_cache  fcc;
@@ -712,8 +768,7 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 			return &EG(uninitialized_zval);
 		}
 	} else {
-		// TODO: read bit-field ???
-		return &EG(uninitialized_zval);
+		zend_ffi_bit_field_to_zval(cdata->ptr, field, rv);
 	}
 
 	return rv;
@@ -769,7 +824,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		ptr = (void*)(((char*)cdata->ptr) + field->offset);
 		zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
 	} else {
-		// TODO: write bit-field ???
+		zend_ffi_zval_to_bit_field(cdata->ptr, field, value);
 	}
 }
 /* }}} */
@@ -1044,7 +1099,8 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 							zend_hash_add(ht, key, &tmp);
 						}
 					} else {
-						// TODO: read bit-field ???
+						zend_ffi_bit_field_to_zval(ptr, f, &tmp);
+						zend_hash_add(ht, key, &tmp);
 					}
 				}
 			} ZEND_HASH_FOREACH_END();
