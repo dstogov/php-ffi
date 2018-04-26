@@ -812,11 +812,11 @@ COMMENT: /\/\*([^\*]|\*+[^\*\/])*\*+\//;
 SKIP: ( EOL | WS | ONE_LINE_COMMENT | COMMENT )*;
 
 %%
-int zend_ffi_parse_decl(zend_string *str) {
+int zend_ffi_parse_decl(const char *str, size_t len) {
 	if (SETJMP(FFI_G(bailout))==0) {
 		FFI_G(allow_vla) = 0;
-		yy_buf = (unsigned char*)ZSTR_VAL(str);
-		yy_end = yy_buf + ZSTR_LEN(str);
+		yy_buf = (unsigned char*)str;
+		yy_end = yy_buf + len;
 		parse();
 		return SUCCESS;
 	} else {
@@ -824,13 +824,13 @@ int zend_ffi_parse_decl(zend_string *str) {
 	}
 }
 
-int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl) {
+int zend_ffi_parse_type(const char *str, size_t len, zend_ffi_dcl *dcl) {
 	int sym;
 
 	if (SETJMP(FFI_G(bailout))==0) {
 		FFI_G(allow_vla) = 0;
-		yy_pos = yy_text = yy_buf = (unsigned char*)ZSTR_VAL(str);
-		yy_end = yy_buf + ZSTR_LEN(str);
+		yy_pos = yy_text = yy_buf = (unsigned char*)str;
+		yy_end = yy_buf + len;
 		yy_line = 1;
 		sym = parse_type_name(get_sym(), dcl);
 		if (sym != YY_EOF) {

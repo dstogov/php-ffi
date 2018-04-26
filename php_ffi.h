@@ -22,6 +22,7 @@
 typedef struct _zend_ffi_type  zend_ffi_type;
 
 ZEND_BEGIN_MODULE_GLOBALS(ffi)
+	char *preload;
 	/* predefined ffi_types */
 	HashTable types;
 	HashTable *callbacks;
@@ -35,6 +36,7 @@ ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	HashTable *symbols;
 	HashTable *tags;
 	zend_bool allow_vla;
+	zend_bool persistent;
 ZEND_END_MODULE_GLOBALS(ffi)
 
 ZEND_EXTERN_MODULE_GLOBALS(ffi)
@@ -118,6 +120,8 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 #define	ZEND_FFI_ATTR_MS_STRUCT         (1<<7)
 #define	ZEND_FFI_ATTR_GCC_STRUCT        (1<<8)
 
+#define	ZEND_FFI_ATTR_PERSISTENT        (1<<9)
+
 #define ZEND_FFI_STRUCT_ATTRS \
 	(ZEND_FFI_ATTR_UNION|ZEND_FFI_ATTR_PACKED|ZEND_FFI_ATTR_MS_STRUCT \
 	|ZEND_FFI_ATTR_GCC_STRUCT)
@@ -176,8 +180,8 @@ typedef struct _zend_ffi_val {
 	};
 } zend_ffi_val;
 
-int zend_ffi_parse_decl(zend_string *str);
-int zend_ffi_parse_type(zend_string *str, zend_ffi_dcl *dcl);
+int zend_ffi_parse_decl(const char *str, size_t len);
+int zend_ffi_parse_type(const char *str, size_t len, zend_ffi_dcl *dcl);
 
 /* parser callbacks */
 void zend_ffi_parser_error(const char *msg, ...) ZEND_NORETURN;
