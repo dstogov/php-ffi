@@ -2465,7 +2465,7 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 {
 	struct stat buf;
 	int fd;
-	char *code, *scope_name;
+	char *code, *code_pos, *scope_name, *lib, *p;
 	size_t code_size, scope_name_len;
 	zend_ffi_scope *scope;
 
@@ -2505,29 +2505,86 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 		return;
 	}
 
-	code_size = buf.st_size;
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
 
+	code_size = buf.st_size;
 	code = emalloc(code_size + 1);
 	fd = open(filename, O_RDONLY, 0);
 	if (fd < 0 || read(fd, code, code_size) != code_size) {
-		efree(code);
 		zend_error(E_WARNING, "FFI: failed pre-loading '%s', cannot read_file", filename);
-		return;
+		goto cleanup;
 	}
 	close(fd);
 	code[code_size] = 0;
 
-	FFI_G(symbols) = NULL;
-	FFI_G(tags) = NULL;
+	code_pos = code;
+	scope_name = NULL;
+	lib = NULL;
+	while (*code_pos == '#') {
+		if (strncmp(code_pos, "#define FFI_SCOPE \"", sizeof("#define FFI_SCOPE \"") - 1) == 0) {
+			if (scope_name) {
+				zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_SCOPE defined twice", filename);
+				goto cleanup;
+			}
+			scope_name = p = code_pos + sizeof("#define FFI_SCOPE \"") - 1;
+			while (1) {
+				if (*p == '\"') {
+					*p = 0;
+					p++;
+					break;
+				} else if (*p <= ' ') {
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_SCOPE define", filename);
+					goto cleanup;
+				}
+				p++;
+			}
+			while (*p == ' ' || *p == '\t') {
+				p++;
+			}
+			while (*p == '\r' || *p == '\n') {
+				p++;
+			}
+			code_pos = p;
+		} else if (strncmp(code_pos, "#define FFI_LIB \"", sizeof("#define FFI_LIB \"") - 1) == 0) {
+			if (lib) {
+				zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_LIB defined twice", filename);
+				goto cleanup;
+			}
+			lib = p = code_pos + sizeof("#define FFI_LIB \"") - 1;
+			while (1) {
+				if (*p == '\"') {
+					*p = 0;
+					p++;
+					break;
+				} else if (*p <= ' ') {
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_LIB define", filename);
+					goto cleanup;
+				}
+				p++;
+			}
+			while (*p == ' ' || *p == '\t') {
+				p++;
+			}
+			while (*p == '\r' || *p == '\n') {
+				p++;
+			}
+			code_pos = p;
+		} else {
+			break;
+		}
+	}
+	code_size = strlen(code_pos);
 
-	if (zend_ffi_parse_decl(code, code_size) != SUCCESS) {
+	if (!scope_name) {
+		scope_name = "C";
+	}
+	scope_name_len = strlen(scope_name);
+
+	if (zend_ffi_parse_decl(code_pos, code_size) != SUCCESS) {
 		zend_error(E_WARNING, "FFI: failed pre-loading '%s'", filename);
 		goto cleanup;
 	}
-
-	// TODO: get scope name ???
-	scope_name = "libc";
-	scope_name_len = strlen(scope_name);
 
 	scope = NULL;
 	if (FFI_G(scopes)) {
@@ -2535,15 +2592,11 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 	}
 
 	if (FFI_G(symbols) || FFI_G(tags)) {
-		const char *lib = NULL;
 		DL_HANDLE handle = NULL;
 		void *addr;
 		zend_string *name;
 		zend_ffi_symbol *sym;
 		zend_ffi_tag *tag;
-
-		// TODO: get lib name ???
-		lib = "libc.so.6";
 
 		if (lib) {
 			handle = DL_LOAD(lib);
