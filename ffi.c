@@ -42,6 +42,9 @@ typedef enum _zend_ffi_tag_kind {
 	ZEND_FFI_TAG_UNION
 } zend_ffi_tag_kind;
 
+static const char *zend_ffi_tag_kind_name[3] = {"enum", "struct", "union"};
+
+
 typedef struct _zend_ffi_tag {
 	zend_ffi_tag_kind      kind;
 	zend_ffi_type         *type;
@@ -2595,8 +2598,16 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 			zend_ffi_symbol *tag;
 
 			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(tags), name, tag) {
-				// TODO: verify tag redefinition ???
-				// TODO: check if this is the same definition ???
+				if (scope
+				 && scope->tags
+				 && zend_hash_find(scope->tags, name)) {
+					// TODO: check if this is the same definition ???
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s %s'", filename, zend_ffi_tag_kind_name[tag->kind], ZSTR_VAL(name));
+					if (lib) {
+						DL_UNLOAD(handle);
+					}
+					goto cleanup;
+				}
 			} ZEND_HASH_FOREACH_END();
 		}
 
