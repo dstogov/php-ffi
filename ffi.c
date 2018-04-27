@@ -23,6 +23,7 @@
 #include "php.h"
 #include "php_ffi.h"
 #include "ext/standard/info.h"
+#include "php_scandir.h"
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
 #include "zend_closures.h"
@@ -2453,7 +2454,7 @@ ZEND_INI_END()
 
 static int (*orig_post_startup_cb)(void);
 
-static void zend_ffi_preload_file(const char *filename) /* {{{ */
+static void zend_ffi_preload(const char *filename) /* {{{ */
 {
 	struct stat buf;
 	int fd;
@@ -2465,6 +2466,38 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 		zend_error(E_WARNING, "FFI: failed pre-loading '%s', file doesn't exist", filename);
 		return;
 	}
+
+	if ((buf.st_mode & S_IFMT) == S_IFDIR){
+		/* Preload all files with ".h" extension from the directory */
+		size_t filename_len = strlen(filename);
+		struct dirent **namelist = NULL;
+		int nfiles, i;
+		char *p;
+		char file[MAXPATHLEN];
+
+		nfiles = php_scandir(filename, &namelist, 0, NULL);
+		for (i = 0; i < nfiles; i++) {
+			p = strrchr(namelist[i]->d_name, '.');
+			if (p && p[1] == 'h' && p[2] == 0) {
+				if (IS_SLASH(filename[filename_len - 1])) {
+					snprintf(file, MAXPATHLEN, "%s%s", filename, namelist[i]->d_name);
+				} else {
+					snprintf(file, MAXPATHLEN, "%s%c%s", filename, DEFAULT_SLASH, namelist[i]->d_name);
+				}
+				zend_ffi_preload(file);
+			}
+			free(namelist[i]);
+		}
+		if (namelist) {
+			free(namelist);
+		}
+
+		return;
+	} else if ((buf.st_mode & S_IFMT) != S_IFREG) {
+		zend_error(E_WARNING, "FFI: failed pre-loading '%s', not a regular file", filename);
+		return;
+	}
+
 	code_size = buf.st_size;
 
 	code = emalloc(code_size + 1);
@@ -2498,6 +2531,7 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 		DL_HANDLE handle = NULL;
 		void *addr;
 		zend_string *name;
+		zend_ffi_symbol *sym;
 		zend_ffi_tag *tag;
 
 		// TODO: get lib name ???
@@ -2517,8 +2551,6 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 		}
 
 		if (FFI_G(symbols)) {
-			zend_ffi_symbol *sym;
-
 			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
 				if (sym->kind == ZEND_FFI_SYM_VAR) {
 					addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
@@ -2578,7 +2610,34 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 			FFI_G(symbols) = NULL;
 			FFI_G(tags) = NULL;
 		} else {
-			// TODO: add symbols and tags to existing scope???
+			if (FFI_G(symbols)) {
+				if (!scope->symbols) {
+					scope->symbols = FFI_G(symbols);
+					FFI_G(symbols) = NULL;
+				} else {
+					ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
+						if (!zend_hash_add_ptr(scope->symbols, name, sym)) {
+							zend_ffi_type_dtor(sym->type);
+							free(sym);
+						}
+					} ZEND_HASH_FOREACH_END();
+					FFI_G(symbols)->pDestructor = NULL;
+				}
+			}
+			if (FFI_G(tags)) {
+				if (!scope->tags) {
+					scope->tags = FFI_G(tags);
+					FFI_G(tags) = NULL;
+				} else {
+					ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(tags), name, tag) {
+						if (!zend_hash_add_ptr(scope->tags, name, tag)) {
+							zend_ffi_type_dtor(tag->type);
+							free(tag);
+						}
+					} ZEND_HASH_FOREACH_END();
+					FFI_G(symbols)->pDestructor = NULL;
+				}
+			}
 		}
 	}
 
@@ -2598,10 +2657,22 @@ cleanup:
 
 static int zend_ffi_post_startup(void) /* {{{ */
 {
+	char *buf, *path, *end;
+
 	FFI_G(persistent) = 1;
 
-	// TODO: preload list of files and directories specified in FFI_G(preload) ???
-	zend_ffi_preload_file(FFI_G(preload));
+	/* Preload list of files and directories specified in FFI_G(preload)*/
+	buf = estrdup(FFI_G(preload));
+	for (path = buf; path; path=end) {
+		end = strchr(path, DEFAULT_DIR_SEPARATOR);
+		if (end) {
+			*(end++) = 0;
+		}
+		if (strlen(path) != 0) {
+			zend_ffi_preload(path);
+		}
+	}
+	efree(buf);
 
 	FFI_G(persistent) = 0;
 
