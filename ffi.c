@@ -2045,8 +2045,6 @@ static void zend_ffi_tags_cleanup(zend_ffi_dcl *dcl) /* {{{ */
 }
 /* }}} */
 
-
-
 ZEND_METHOD(FFI, new) /* {{{ */
 {
 	zend_string *type_def;
@@ -2461,6 +2459,174 @@ ZEND_INI_END()
 
 static int (*orig_post_startup_cb)(void);
 
+static int zend_ffi_same_types(zend_ffi_type *old, zend_ffi_type *type) /* {{{ */
+{
+	if (old == type) {
+		return 1;
+	}
+
+	if (old->kind != type->kind
+	 || old->size != type->size
+	 || old->align != type->align
+	 || old->attr != type->attr) {
+		return 0;
+	}
+
+	switch (old->kind) {
+		case ZEND_FFI_TYPE_ENUM:
+			return old->enumeration.kind == type->enumeration.kind;
+		case ZEND_FFI_TYPE_ARRAY:
+			return old->array.length == type->array.length
+			 &&	zend_ffi_same_types(ZEND_FFI_TYPE(old->array.type), ZEND_FFI_TYPE(type->array.type));
+		case ZEND_FFI_TYPE_POINTER:
+			return zend_ffi_same_types(ZEND_FFI_TYPE(old->pointer.type), ZEND_FFI_TYPE(type->pointer.type));
+		case ZEND_FFI_TYPE_STRUCT:
+			if (zend_hash_num_elements(&old->record.fields) != zend_hash_num_elements(&type->record.fields)) {
+				return 0;
+			} else {
+				zend_ffi_field *old_field, *field;
+				zend_string *key;
+				Bucket *b = type->record.fields.arData;
+
+				ZEND_HASH_FOREACH_STR_KEY_PTR(&old->record.fields, key, old_field) {
+					while (Z_TYPE(b->val) == IS_UNDEF) {
+						b++;
+					}
+					if (key) {
+						if (!b->key
+						 || !zend_string_equals(key, b->key)) {
+							return 0;
+						}
+					} else if (b->key) {
+						return 0;
+					}
+					field = Z_PTR(b->val);
+					if (old_field->offset != field->offset
+					 || old_field->is_const != field->is_const
+					 || old_field->is_nested != field->is_nested
+					 || old_field->first_bit != field->first_bit
+					 || old_field->bits != field->bits
+					 || !zend_ffi_same_types(ZEND_FFI_TYPE(old_field->type), ZEND_FFI_TYPE(field->type))) {
+						return 0;
+					}
+					b++;
+				} ZEND_HASH_FOREACH_END();
+			}
+			break;
+		case ZEND_FFI_TYPE_FUNC:
+			if (old->func.abi != type->func.abi
+			 || ((old->func.args ? zend_hash_num_elements(old->func.args) : 0) != (type->func.args ? zend_hash_num_elements(type->func.args) : 0))
+			 || !zend_ffi_same_types(ZEND_FFI_TYPE(old->func.ret_type), ZEND_FFI_TYPE(type->func.ret_type))) {
+				return 0;
+			} else if (old->func.args) {
+				zend_ffi_type *arg_type;
+				Bucket *b = type->func.args->arData;
+
+				ZEND_HASH_FOREACH_PTR(old->func.args, arg_type) {
+					while (Z_TYPE(b->val) == IS_UNDEF) {
+						b++;
+					}
+					if (!zend_ffi_same_types(ZEND_FFI_TYPE(arg_type), ZEND_FFI_TYPE(Z_PTR(b->val)))) {
+						return 0;
+					}
+					b++;
+				} ZEND_HASH_FOREACH_END();
+			}
+			break;
+		default:
+			break;
+	}
+
+	return 1;
+}
+/* }}} */
+
+static int zend_ffi_same_symbols(zend_ffi_symbol *old, zend_ffi_symbol *sym) /* {{{ */
+{
+	if (old->kind != sym->kind || old->is_const != sym->is_const) {
+		return 0;
+	}
+
+	if (old->kind == ZEND_FFI_SYM_CONST) {
+		if (old->value != sym->value) {
+			return 0;
+		}
+	}
+
+	return zend_ffi_same_types(ZEND_FFI_TYPE(old->type), ZEND_FFI_TYPE(sym->type));
+}
+/* }}} */
+
+static int zend_ffi_same_tags(zend_ffi_tag *old, zend_ffi_tag *tag) /* {{{ */
+{
+	if (old->kind != tag->kind) {
+		return 0;
+	}
+
+	return zend_ffi_same_types(ZEND_FFI_TYPE(old->type), ZEND_FFI_TYPE(tag->type));
+}
+/* }}} */
+
+static int zend_ffi_subst_old_type(zend_ffi_type **dcl, zend_ffi_type *old, zend_ffi_type *type) /* {{{ */
+{
+	zend_ffi_type *dcl_type;
+	zend_ffi_field *field;
+
+	if (ZEND_FFI_TYPE(*dcl) == type) {
+		*dcl = old;
+		return 1;
+	}
+	dcl_type = *dcl;
+	switch (dcl_type->kind) {
+		case ZEND_FFI_TYPE_POINTER:
+			return zend_ffi_subst_old_type(&dcl_type->pointer.type, old, type);
+		case ZEND_FFI_TYPE_ARRAY:
+			return zend_ffi_subst_old_type(&dcl_type->array.type, old, type);
+		case ZEND_FFI_TYPE_FUNC:
+			if (zend_ffi_subst_old_type(&dcl_type->func.ret_type, old, type)) {
+				return 1;
+			}
+			if (dcl_type->func.args) {
+				zval *zv;
+
+				ZEND_HASH_FOREACH_VAL(dcl_type->func.args, zv) {
+					if (zend_ffi_subst_old_type((zend_ffi_type**)&Z_PTR_P(zv), old, type)) {
+						return 1;
+					}
+				} ZEND_HASH_FOREACH_END();
+			}
+			break;
+		case ZEND_FFI_TYPE_STRUCT:
+			ZEND_HASH_FOREACH_PTR(&dcl_type->record.fields, field) {
+				if (zend_ffi_subst_old_type(&field->type, old, type)) {
+					return 1;
+				}
+			} ZEND_HASH_FOREACH_END();
+			break;
+		default:
+			break;
+	}
+	return 0;
+} /* }}} */
+
+static void zend_ffi_cleanup_type(zend_ffi_type *old, zend_ffi_type *type) /* {{{ */
+{
+	zend_ffi_symbol *sym;
+	zend_ffi_tag *tag;
+
+	if (FFI_G(symbols)) {
+		ZEND_HASH_FOREACH_PTR(FFI_G(symbols), sym) {
+			zend_ffi_subst_old_type(&sym->type, old, type);
+		} ZEND_HASH_FOREACH_END();
+	}
+	if (FFI_G(tags)) {
+		ZEND_HASH_FOREACH_PTR(FFI_G(tags), tag) {
+			zend_ffi_subst_old_type(&tag->type, old, type);
+		} ZEND_HASH_FOREACH_END();
+	}
+}
+/* }}} */
+
 static void zend_ffi_preload(const char *filename) /* {{{ */
 {
 	struct stat buf;
@@ -2634,32 +2800,52 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 					}
 					sym->addr = addr;
 				}
-				if (scope
-				 && scope->symbols
-				 && zend_hash_find(scope->symbols, name)) {
-					// TODO: check if this is the same definition ???
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s'", filename, ZSTR_VAL(name));
-					if (lib) {
-						DL_UNLOAD(handle);
+				if (scope && scope->symbols) {
+					zend_ffi_symbol *old_sym = zend_hash_find_ptr(scope->symbols, name);
+
+					if (old_sym) {
+						if (zend_ffi_same_symbols(old_sym, sym)) {
+							if (ZEND_FFI_TYPE_IS_OWNED(sym->type)
+							 && ZEND_FFI_TYPE(old_sym->type) != ZEND_FFI_TYPE(sym->type)) {
+								zend_ffi_type *type = ZEND_FFI_TYPE(sym->type);
+								zend_ffi_cleanup_type(ZEND_FFI_TYPE(old_sym->type), ZEND_FFI_TYPE(type));
+								zend_ffi_type_dtor(type);
+							}
+						} else {
+							zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s'", filename, ZSTR_VAL(name));
+							if (lib) {
+								DL_UNLOAD(handle);
+							}
+							goto cleanup;
+						}
 					}
-					goto cleanup;
 				}
 			} ZEND_HASH_FOREACH_END();
 		}
 
 		if (FFI_G(tags)) {
-			zend_ffi_symbol *tag;
+			zend_ffi_tag *tag;
 
 			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(tags), name, tag) {
-				if (scope
-				 && scope->tags
-				 && zend_hash_find(scope->tags, name)) {
-					// TODO: check if this is the same definition ???
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s %s'", filename, zend_ffi_tag_kind_name[tag->kind], ZSTR_VAL(name));
-					if (lib) {
-						DL_UNLOAD(handle);
+				if (scope && scope->tags) {
+					zend_ffi_tag *old_tag = zend_hash_find_ptr(scope->tags, name);
+
+					if (old_tag) {
+						if (zend_ffi_same_tags(old_tag, tag)) {
+							if (ZEND_FFI_TYPE_IS_OWNED(tag->type)
+							 && ZEND_FFI_TYPE(old_tag->type) != ZEND_FFI_TYPE(tag->type)) {
+								zend_ffi_type *type = ZEND_FFI_TYPE(tag->type);
+								zend_ffi_cleanup_type(ZEND_FFI_TYPE(old_tag->type), ZEND_FFI_TYPE(type));
+								zend_ffi_type_dtor(type);
+							}
+						} else {
+							zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s %s'", filename, zend_ffi_tag_kind_name[tag->kind], ZSTR_VAL(name));
+							if (lib) {
+								DL_UNLOAD(handle);
+							}
+							goto cleanup;
+						}
 					}
-					goto cleanup;
 				}
 			} ZEND_HASH_FOREACH_END();
 		}
@@ -2704,7 +2890,7 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 							free(tag);
 						}
 					} ZEND_HASH_FOREACH_END();
-					FFI_G(symbols)->pDestructor = NULL;
+					FFI_G(tags)->pDestructor = NULL;
 				}
 			}
 		}
