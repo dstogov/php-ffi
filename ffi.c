@@ -1890,7 +1890,11 @@ static void zend_ffi_throw_parser_error(const char *format, ...) /* {{{ */
 	va_start(va, format);
 	zend_vspprintf(&message, 0, format, va);
 
-	zend_throw_exception(zend_ffi_parser_exception_ce, message, 0);
+	if (EG(current_execute_data)) {
+		zend_throw_exception(zend_ffi_parser_exception_ce, message, 0);
+	} else {
+		zend_error(E_WARNING, "FFI Parser: %s", message);
+	}
 
 	efree(message);
 	va_end(va);
@@ -2460,7 +2464,7 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 	int fd;
 	char *code, *scope_name;
 	size_t code_size, scope_name_len;
-	zend_ffi_scope *scope = NULL;
+	zend_ffi_scope *scope;
 
 	if (stat(filename, &buf) != 0) {
 		zend_error(E_WARNING, "FFI: failed pre-loading '%s', file doesn't exist", filename);
@@ -2514,7 +2518,7 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 	FFI_G(tags) = NULL;
 
 	if (zend_ffi_parse_decl(code, code_size) != SUCCESS) {
-		// TODO: error reporting ???
+		zend_error(E_WARNING, "FFI: failed pre-loading '%s'", filename);
 		goto cleanup;
 	}
 
@@ -2522,6 +2526,7 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 	scope_name = "libc";
 	scope_name_len = strlen(scope_name);
 
+	scope = NULL;
 	if (FFI_G(scopes)) {
 		scope = zend_hash_str_find_ptr(FFI_G(scopes), scope_name, scope_name_len);
 	}
@@ -2944,7 +2949,11 @@ void zend_ffi_parser_error(const char *format, ...) /* {{{ */
 	va_start(va, format);
 	zend_vspprintf(&message, 0, format, va);
 
-	zend_throw_exception(zend_ffi_parser_exception_ce, message, 0);
+	if (EG(current_execute_data)) {
+		zend_throw_exception(zend_ffi_parser_exception_ce, message, 0);
+	} else {
+		zend_error(E_WARNING, "FFI Parser: %s", message);
+	}
 
 	efree(message);
 	va_end(va);
