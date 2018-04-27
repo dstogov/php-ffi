@@ -22,10 +22,16 @@
 typedef struct _zend_ffi_type  zend_ffi_type;
 
 ZEND_BEGIN_MODULE_GLOBALS(ffi)
-	char *preload;
 	/* predefined ffi_types */
 	HashTable types;
+
+	/* preloading */
+	char *preload;               /* list of files and directories to preload */
+	HashTable *scopes;           /* list of preloaded scopes */
+
+	/* callbacks */
 	HashTable *callbacks;
+
 	/* ffi_parser */
 	JMP_BUF	bailout;
 	unsigned const char *buf;

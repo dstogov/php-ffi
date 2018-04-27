@@ -123,11 +123,17 @@ typedef struct _zend_ffi_symbol {
 	};
 } zend_ffi_symbol;
 
+typedef struct _zend_ffi_scope {
+	HashTable             *symbols;
+	HashTable             *tags;
+} zend_ffi_scope;
+
 typedef struct _zend_ffi {
 	zend_object            std;
 	DL_HANDLE              lib;
 	HashTable             *symbols;
 	HashTable             *tags;
+	zend_bool              persistent;
 } zend_ffi;
 
 #define ZEND_FFI_TYPE_OWNED        (1<<0)
@@ -1286,11 +1292,30 @@ static void zend_ffi_cdata_dtor(zend_ffi_cdata *cdata) /* {{{ */
 }
 /* }}} */
 
+static void zend_ffi_scope_hash_dtor(zval *zv) /* {{{ */
+{
+	zend_ffi_scope *scope = Z_PTR_P(zv);
+	if (scope->symbols) {
+		zend_hash_destroy(scope->symbols);
+		free(scope->symbols);
+	}
+	if (scope->tags) {
+		zend_hash_destroy(scope->tags);
+		free(scope->tags);
+	}
+	free(scope);
+}
+/* }}} */
+
 static void zend_ffi_free_obj(zend_object *object) /* {{{ */
 {
 	zend_ffi *ffi = (zend_ffi*)object;
 
 	zend_object_std_dtor(&ffi->std);
+
+	if (ffi->persistent) {
+		return;
+	}
 
 	if (ffi->lib) {
 		DL_UNLOAD(ffi->lib);
@@ -1815,6 +1840,35 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 			} ZEND_HASH_FOREACH_END();
 		}
 	}
+}
+/* }}} */
+
+ZEND_METHOD(FFI, scope) /* {{{ */
+{
+	zend_string *scope_name;
+	zend_ffi_scope *scope = NULL;
+	zend_ffi *ffi;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(scope_name)
+	ZEND_PARSE_PARAMETERS_END();
+
+	if (FFI_G(scopes)) {
+		scope = zend_hash_find_ptr(FFI_G(scopes), scope_name);
+	}
+
+	if (!scope) {
+		zend_throw_error(zend_ffi_exception_ce, "Failed loading scope '%s'", ZSTR_VAL(scope_name));
+		return;
+	}
+
+	ffi = (zend_ffi*)zend_ffi_new(zend_ffi_ce);
+
+	ffi->symbols = scope->symbols;
+	ffi->tags = scope->tags;
+	ffi->persistent = 1;
+
+	RETURN_OBJ(&ffi->std);
 }
 /* }}} */
 
@@ -2379,6 +2433,7 @@ ZEND_METHOD(FFI, string) /* {{{ */
 
 static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,  ZEND_ACC_PUBLIC)
+	ZEND_ME(FFI, scope, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, new, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -2398,55 +2453,13 @@ ZEND_INI_END()
 
 static int (*orig_post_startup_cb)(void);
 
-static void zend_ffi_preload_func(const char *namespace, size_t len, zend_string *name, zend_ffi_symbol *sym) /* {{{ */
-{
-	zend_internal_function *func;
-	zend_ffi_type *type = ZEND_FFI_TYPE(sym->type);
-	uint32_t num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
-	zend_string *ns_name, *lc_name;
-
-	if (namespace && len) {
-		ns_name = zend_string_alloc(len + ZSTR_LEN(name) + 1, 1);
-		memcpy(ZSTR_VAL(ns_name), namespace, len);
-		ZSTR_VAL(ns_name)[len] = '\\';
-		memcpy(ZSTR_VAL(ns_name) + len + 1, ZSTR_VAL(name), ZSTR_LEN(name) + 1);
-	} else {
-		ns_name = zend_string_copy(name);
-	}
-
-	ns_name = zend_new_interned_string(ns_name);
-	lc_name = zend_string_tolower_ex(ns_name, 1);
-	lc_name = zend_new_interned_string(lc_name);
-
-	func = calloc(sizeof(zend_internal_function) + sizeof(zend_internal_arg_info) * num_args, 1);
-	func->type = ZEND_INTERNAL_FUNCTION;
-	func->arg_flags[0] = 0;
-	func->arg_flags[1] = 0;
-	func->arg_flags[2] = 0;
-	func->fn_flags = 0;
-	func->function_name = ns_name;
-	func->num_args = func->required_num_args = num_args;
-	func->arg_info = (zend_internal_arg_info*)(func + 1);
-	func->handler = ZEND_FN(ffi_trampoline);
-
-	// TODO: find a better solution to keep type alive ???
-	sym->type = type; // reset owned flag
-
-	// TODO: use of reserved[] may be not safe ???
-	func->reserved[0] = type;
-	func->reserved[1] = sym->addr;
-
-	if (!zend_hash_add_ptr(CG(function_table), lc_name, func)) {
-		// TODO: handle redefinition ???
-	}
-} /* }}} */
-
 static void zend_ffi_preload_file(const char *filename) /* {{{ */
 {
 	struct stat buf;
 	int fd;
-	char *code;
-	size_t code_size;
+	char *code, *scope_name;
+	size_t code_size, scope_name_len;
+	zend_ffi_scope *scope = NULL;
 
 	if (stat(filename, &buf) != 0) {
 		zend_error(E_WARNING, "FFI: failed pre-loading '%s', file doesn't exist", filename);
@@ -2472,21 +2485,23 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 		goto cleanup;
 	}
 
-	if (FFI_G(symbols)) {
+	// TODO: get scope name ???
+	scope_name = "libc";
+	scope_name_len = strlen(scope_name);
+
+	if (FFI_G(scopes)) {
+		scope = zend_hash_str_find_ptr(FFI_G(scopes), scope_name, scope_name_len);
+	}
+
+	if (FFI_G(symbols) || FFI_G(tags)) {
 		const char *lib = NULL;
-		const char *namespace = NULL;
-		size_t namespace_len;
 		DL_HANDLE handle = NULL;
 		void *addr;
 		zend_string *name;
-		zend_ffi_symbol *sym;
+		zend_ffi_tag *tag;
 
 		// TODO: get lib name ???
 		lib = "libc.so.6";
-
-		// TODO: get namespace name ???
-		namespace = "FFI";
-		namespace_len = strlen(namespace);
 
 		if (lib) {
 			handle = DL_LOAD(lib);
@@ -2501,39 +2516,70 @@ static void zend_ffi_preload_file(const char *filename) /* {{{ */
 #endif
 		}
 
-		ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
-			if (sym->kind == ZEND_FFI_SYM_VAR) {
-				addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
-				if (!addr) {
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', cannot resolve variable '%s'", filename, ZSTR_VAL(name));
+		if (FFI_G(symbols)) {
+			zend_ffi_symbol *sym;
+
+			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
+				if (sym->kind == ZEND_FFI_SYM_VAR) {
+					addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
+					if (!addr) {
+						zend_error(E_WARNING, "FFI: failed pre-loading '%s', cannot resolve variable '%s'", filename, ZSTR_VAL(name));
+						if (lib) {
+							DL_UNLOAD(handle);
+						}
+						goto cleanup;
+					}
+					sym->addr = addr;
+				} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
+					addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
+					if (!addr) {
+						zend_error(E_WARNING, "FFI: failed pre-loading '%s', cannot resolve function '%s'", filename, ZSTR_VAL(name));
+						if (lib) {
+							DL_UNLOAD(handle);
+						}
+						goto cleanup;
+					}
+					sym->addr = addr;
+				}
+				if (scope
+				 && scope->symbols
+				 && zend_hash_find(scope->symbols, name)) {
+					// TODO: check if this is the same definition ???
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', redefinition of '%s'", filename, ZSTR_VAL(name));
 					if (lib) {
 						DL_UNLOAD(handle);
 					}
 					goto cleanup;
 				}
-				sym->addr = addr;
-			} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
-				addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
-				if (!addr) {
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', cannot resolve function '%s'", filename, ZSTR_VAL(name));
-					if (lib) {
-						DL_UNLOAD(handle);
-					}
-					goto cleanup;
-				}
-				// TODO: check if function already defined ???
-				sym->addr = addr;
-			}
-		} ZEND_HASH_FOREACH_END();
+			} ZEND_HASH_FOREACH_END();
+		}
 
-		ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
-			if (sym->kind == ZEND_FFI_SYM_FUNC) {
-				zend_ffi_preload_func(namespace, namespace_len, name, sym);
-			} else {
-				// TODO: handle variables and constants ???
-			}
-		} ZEND_HASH_FOREACH_END();
+		if (FFI_G(tags)) {
+			zend_ffi_symbol *tag;
 
+			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(tags), name, tag) {
+				// TODO: verify tag redefinition ???
+				// TODO: check if this is the same definition ???
+			} ZEND_HASH_FOREACH_END();
+		}
+
+		if (!scope) {
+			scope = malloc(sizeof(zend_ffi_scope));
+			scope->symbols = FFI_G(symbols);
+			scope->tags = FFI_G(tags);
+
+			if (!FFI_G(scopes)) {
+				FFI_G(scopes) = malloc(sizeof(HashTable));
+				zend_hash_init(FFI_G(scopes), 0, NULL, zend_ffi_scope_hash_dtor, 1);
+			}
+
+			zend_hash_str_add_ptr(FFI_G(scopes), scope_name, scope_name_len, scope);
+
+			FFI_G(symbols) = NULL;
+			FFI_G(tags) = NULL;
+		} else {
+			// TODO: add symbols and tags to existing scope???
+		}
 	}
 
 cleanup:
@@ -2783,6 +2829,10 @@ static ZEND_GINIT_FUNCTION(ffi)
  */
 static ZEND_GSHUTDOWN_FUNCTION(ffi)
 {
+	if (ffi_globals->scopes) {
+		zend_hash_destroy(ffi_globals->scopes);
+		free(ffi_globals->scopes);
+	}
 	zend_hash_destroy(&ffi_globals->types);
 }
 /* }}} */
