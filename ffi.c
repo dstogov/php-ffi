@@ -2217,6 +2217,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	}
 	cdata->type = dcl.type;
 	cdata->ptr = ((zend_ffi_cdata*)Z_OBJ_P(zv))->ptr;
+	cdata->is_ref = ((zend_ffi_cdata*)Z_OBJ_P(zv))->is_ref;
 	cdata->owned_ptr = 0;
 	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
