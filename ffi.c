@@ -1383,7 +1383,7 @@ static zval *zend_ffi_read_var(zval *object, zval *member, int read_type, void *
 
 	if (ffi->symbols) {
 		sym = zend_hash_find_ptr(ffi->symbols, var_name);
-		if (sym && sym->kind != ZEND_FFI_SYM_VAR) {
+		if (sym && sym->kind != ZEND_FFI_SYM_VAR && sym->kind != ZEND_FFI_SYM_CONST) {
 			sym = NULL;
 		}
 	}
@@ -1395,8 +1395,12 @@ static zval *zend_ffi_read_var(zval *object, zval *member, int read_type, void *
 
 	zend_tmp_string_release(tmp_var_name);
 
-	if (zend_ffi_cdata_to_zval(NULL, sym->addr, ZEND_FFI_TYPE(sym->type), read_type, rv, sym->is_const, 0) != SUCCESS) {
-		return &EG(uninitialized_zval);
+	if (sym->kind == ZEND_FFI_SYM_VAR) {
+		if (zend_ffi_cdata_to_zval(NULL, sym->addr, ZEND_FFI_TYPE(sym->type), read_type, rv, sym->is_const, 0) != SUCCESS) {
+			return &EG(uninitialized_zval);
+		}
+	} else {
+		ZVAL_LONG(rv, sym->value);
 	}
 
 	return rv;
