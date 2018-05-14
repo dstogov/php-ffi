@@ -1181,6 +1181,11 @@ static int zend_ffi_cdata_get_closure(zval *obj, zend_class_entry **ce_ptr, zend
 	func->common.num_args = func->common.required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
 	func->internal_function.handler = ZEND_FN(ffi_trampoline);
 
+	if (func->common.num_args > MAX_ARG_FLAG_NUM) {
+		func->common.arg_info = emalloc(sizeof(zend_arg_info) * func->common.num_args);
+		memset(func->common.arg_info, 0, sizeof(zend_arg_info) * func->common.num_args);
+	}
+
 	func->internal_function.reserved[0] = type;
 	func->internal_function.reserved[1] = *(void**)cdata->ptr;
 
@@ -1723,6 +1728,9 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 
 	zend_string_release(EX(func)->common.function_name);
 	if (EX(func)->common.fn_flags & ZEND_ACC_CALL_VIA_TRAMPOLINE) {
+		if (EX(func)->common.arg_info) {
+			efree(EX(func)->common.arg_info);
+		}
 		zend_free_trampoline(EX(func));
 		EX(func) = NULL;
 	}
@@ -1776,6 +1784,11 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 	func->common.function_name = zend_string_copy(name);
 	func->common.num_args = func->common.required_num_args = type->func.args ? zend_hash_num_elements(type->func.args) : 0;
 	func->internal_function.handler = ZEND_FN(ffi_trampoline);
+
+	if (func->common.num_args > MAX_ARG_FLAG_NUM) {
+		func->common.arg_info = emalloc(sizeof(zend_arg_info) * func->common.num_args);
+		memset(func->common.arg_info, 0, sizeof(zend_arg_info) * func->common.num_args);
+	}
 
 	func->internal_function.reserved[0] = type;
 	func->internal_function.reserved[1] = sym->addr;
