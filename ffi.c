@@ -1744,8 +1744,8 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 	} else if (ZSTR_LEN(name) == sizeof("cast") -1
 	 && (ZSTR_VAL(name)[0] == 'c' || ZSTR_VAL(name)[0] == 'C')
 	 && (ZSTR_VAL(name)[1] == 'a' || ZSTR_VAL(name)[1] == 'A')
-	 && (ZSTR_VAL(name)[1] == 's' || ZSTR_VAL(name)[1] == 'S')
-	 && (ZSTR_VAL(name)[2] == 't' || ZSTR_VAL(name)[2] == 'T')) {
+	 && (ZSTR_VAL(name)[2] == 's' || ZSTR_VAL(name)[2] == 'S')
+	 && (ZSTR_VAL(name)[3] == 't' || ZSTR_VAL(name)[3] == 'T')) {
 		return (zend_function*)&zend_ffi_cast_fn;
 	}
 
