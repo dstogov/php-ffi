@@ -27,5 +27,5 @@ var_dump($ffi->time(null));
 
 $tv = $ffi->new("struct timeval");
 $tz = $ffi->new("struct timezone");
-var_dump($ffi->gettimeofday($tv, $tz));
+var_dump($ffi->gettimeofday(FFI::addr($tv), FFI::addr($tz)));
 var_dump($tv, $tz);

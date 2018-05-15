@@ -31,7 +31,7 @@ var_dump($libc->time(null));
 
 $tv = $libc->new("struct timeval");
 $tz = $libc->new("struct timezone");
-$libc->gettimeofday($tv, $tz);
+$libc->gettimeofday(FFI::addr($tv), FFI::addr($tz));
 var_dump($tv->tv_sec, $tv->tv_usec, $tz);
 ?>
 ```
