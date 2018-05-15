@@ -175,6 +175,7 @@ static zend_internal_function zend_ffi_cast_fn;
 /* forward declarations */
 static void zend_ffi_finalize_type(zend_ffi_dcl *dcl);
 static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value);
+static char *zend_ffi_parse_directives(const char *filename, char *code_pos, char **scope_name, char **lib, zend_bool preload);
 static ZEND_FUNCTION(ffi_trampoline);
 
 static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
@@ -1871,6 +1872,123 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 }
 /* }}} */
 
+ZEND_METHOD(FFI, load) /* {{{ */
+{
+	zend_string *fn;
+	struct stat buf;
+	int fd;
+	char *filename, *code, *code_pos, *scope_name, *lib;
+	size_t code_size;
+	zend_ffi *ffi;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(fn)
+	ZEND_PARSE_PARAMETERS_END();
+
+	filename = ZSTR_VAL(fn);
+	if (stat(filename, &buf) != 0) {
+		zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', file doesn't exist", filename);
+		return;
+	}
+
+	if ((buf.st_mode & S_IFMT) != S_IFREG) {
+		zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', not a regular file", filename);
+		return;
+	}
+
+	code_size = buf.st_size;
+	code = emalloc(code_size + 1);
+	fd = open(filename, O_RDONLY, 0);
+	if (fd < 0 || read(fd, code, code_size) != code_size) {
+		zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', cannot read_file", filename);
+		efree(code);
+		close(fd);
+		return;
+	}
+	close(fd);
+	code[code_size] = 0;
+
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
+
+	scope_name = NULL;
+	lib = NULL;
+	code_pos = zend_ffi_parse_directives(filename, code, &scope_name, &lib, 0);
+	if (!code_pos) {
+		efree(code);
+		return;
+	}
+	code_size -= code_pos - code;
+
+	if (zend_ffi_parse_decl(code_pos, code_size) != SUCCESS) {
+		zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s'", filename);
+		efree(code);
+		goto cleanup;
+	}
+	efree(code);
+
+	ffi = (zend_ffi*)zend_ffi_new(zend_ffi_ce);
+
+	if (lib) {
+		DL_HANDLE handle = DL_LOAD(lib);
+		if (!handle) {
+			zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s'", lib);
+			goto cleanup;
+		}
+		ffi->lib = handle;
+#ifdef RTLD_DEFAULT
+	} else if (1) {
+		// TODO: this might need to be disabled or protected ???
+		ffi->lib = RTLD_DEFAULT;
+#endif
+	}
+
+	ffi->symbols = FFI_G(symbols);
+	ffi->tags = FFI_G(tags);
+
+	if (ffi->symbols) {
+		zend_string *name;
+		zend_ffi_symbol *sym;
+		void *addr;
+
+		ZEND_HASH_FOREACH_STR_KEY_PTR(ffi->symbols, name, sym) {
+			if (sym->kind == ZEND_FFI_SYM_VAR) {
+				addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+				if (!addr) {
+					zend_throw_error(zend_ffi_exception_ce, "Failed resolving C variable '%s'", ZSTR_VAL(name));
+					goto cleanup;
+				}
+				sym->addr = addr;
+			} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
+				addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+				if (!addr) {
+					zend_throw_error(zend_ffi_exception_ce, "Failed resolving C function '%s'", ZSTR_VAL(name));
+					goto cleanup;
+				}
+				sym->addr = addr;
+			}
+		} ZEND_HASH_FOREACH_END();
+	}
+
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
+
+	RETURN_OBJ(&ffi->std);
+
+cleanup:
+	if (FFI_G(symbols)) {
+		zend_hash_destroy(FFI_G(symbols));
+		efree(FFI_G(symbols));
+		FFI_G(symbols) = NULL;
+	}
+	if (FFI_G(tags)) {
+		zend_hash_destroy(FFI_G(tags));
+		efree(FFI_G(tags));
+		FFI_G(tags) = NULL;
+	}
+}
+/* }}} */
+
 ZEND_METHOD(FFI, scope) /* {{{ */
 {
 	zend_string *scope_name;
@@ -2464,6 +2582,7 @@ ZEND_METHOD(FFI, string) /* {{{ */
 
 static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,  ZEND_ACC_PUBLIC)
+	ZEND_ME(FFI, load, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, scope, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, new, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free, NULL,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -2652,6 +2771,85 @@ static void zend_ffi_cleanup_type(zend_ffi_type *old, zend_ffi_type *type) /* {{
 }
 /* }}} */
 
+static char *zend_ffi_parse_directives(const char *filename, char *code_pos, char **scope_name, char **lib, zend_bool preload) /* {{{ */
+{
+	char *p;
+
+	*scope_name = NULL;
+	*lib = NULL;
+	while (*code_pos == '#') {
+		if (strncmp(code_pos, "#define FFI_SCOPE \"", sizeof("#define FFI_SCOPE \"") - 1) == 0) {
+			if (*scope_name) {
+				if (preload) {
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_SCOPE defined twice", filename);
+				} else {
+					zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', FFI_SCOPE defined twice", filename);
+				}
+				return NULL;
+			}
+			*scope_name = p = code_pos + sizeof("#define FFI_SCOPE \"") - 1;
+			while (1) {
+				if (*p == '\"') {
+					*p = 0;
+					p++;
+					break;
+				} else if (*p <= ' ') {
+					if (preload) {
+						zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_SCOPE define", filename);
+					} else {
+						zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', bad FFI_SCOPE define", filename);
+					}
+					return NULL;
+				}
+				p++;
+			}
+			while (*p == ' ' || *p == '\t') {
+				p++;
+			}
+			while (*p == '\r' || *p == '\n') {
+				p++;
+			}
+			code_pos = p;
+		} else if (strncmp(code_pos, "#define FFI_LIB \"", sizeof("#define FFI_LIB \"") - 1) == 0) {
+			if (*lib) {
+				if (preload) {
+					zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_LIB defined twice", filename);
+				} else {
+					zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', FFI_LIB defined twice", filename);
+				}
+				return NULL;
+			}
+			*lib = p = code_pos + sizeof("#define FFI_LIB \"") - 1;
+			while (1) {
+				if (*p == '\"') {
+					*p = 0;
+					p++;
+					break;
+				} else if (*p <= ' ') {
+					if (preload) {
+						zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_LIB define", filename);
+					} else {
+						zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s', bad FFI_LIB define", filename);
+					}
+					return NULL;
+				}
+				p++;
+			}
+			while (*p == ' ' || *p == '\t') {
+				p++;
+			}
+			while (*p == '\r' || *p == '\n') {
+				p++;
+			}
+			code_pos = p;
+		} else {
+			break;
+		}
+	}
+	return code_pos;
+}
+/* }}} */
+
 static void zend_ffi_preload(const char *filename) /* {{{ */
 {
 	struct stat buf;
@@ -2709,63 +2907,13 @@ static void zend_ffi_preload(const char *filename) /* {{{ */
 	close(fd);
 	code[code_size] = 0;
 
-	code_pos = code;
 	scope_name = NULL;
 	lib = NULL;
-	while (*code_pos == '#') {
-		if (strncmp(code_pos, "#define FFI_SCOPE \"", sizeof("#define FFI_SCOPE \"") - 1) == 0) {
-			if (scope_name) {
-				zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_SCOPE defined twice", filename);
-				goto cleanup;
-			}
-			scope_name = p = code_pos + sizeof("#define FFI_SCOPE \"") - 1;
-			while (1) {
-				if (*p == '\"') {
-					*p = 0;
-					p++;
-					break;
-				} else if (*p <= ' ') {
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_SCOPE define", filename);
-					goto cleanup;
-				}
-				p++;
-			}
-			while (*p == ' ' || *p == '\t') {
-				p++;
-			}
-			while (*p == '\r' || *p == '\n') {
-				p++;
-			}
-			code_pos = p;
-		} else if (strncmp(code_pos, "#define FFI_LIB \"", sizeof("#define FFI_LIB \"") - 1) == 0) {
-			if (lib) {
-				zend_error(E_WARNING, "FFI: failed pre-loading '%s', FFI_LIB defined twice", filename);
-				goto cleanup;
-			}
-			lib = p = code_pos + sizeof("#define FFI_LIB \"") - 1;
-			while (1) {
-				if (*p == '\"') {
-					*p = 0;
-					p++;
-					break;
-				} else if (*p <= ' ') {
-					zend_error(E_WARNING, "FFI: failed pre-loading '%s', bad FFI_LIB define", filename);
-					goto cleanup;
-				}
-				p++;
-			}
-			while (*p == ' ' || *p == '\t') {
-				p++;
-			}
-			while (*p == '\r' || *p == '\n') {
-				p++;
-			}
-			code_pos = p;
-		} else {
-			break;
-		}
+	code_pos = zend_ffi_parse_directives(filename, code, &scope_name, &lib, 1);
+	if (!code_pos) {
+		goto cleanup;
 	}
-	code_size = strlen(code_pos);
+	code_size -= code_pos - code;
 
 	if (!scope_name) {
 		scope_name = "C";

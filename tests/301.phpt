@@ -1,12 +1,10 @@
 --TEST--
-FFI 300: FFI preloading
+FFI 301: FFI loading
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
---INI--
-ffi.preload=tests/300.h
 --FILE--
 <?php
-$ffi = FFI::scope("TEST_300");
+$ffi = FFI::load(__DIR__ . "/300.h");
 $ffi->printf("Hello World from %s!\n", "PHP");
 ?>
 --EXPECT--
