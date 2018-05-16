@@ -2279,11 +2279,15 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
 	zend_ffi_type *old_type, *type;
 	zend_ffi_cdata *old_cdata, *cdata;
+	zend_bool deref = 0;
 	zval *zv;
+	void *ptr;
 
-	ZEND_PARSE_PARAMETERS_START(2, 2)
+	ZEND_PARSE_PARAMETERS_START(2, 3)
 		Z_PARAM_STR(type_def)
 		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_BOOL(deref)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (Z_TYPE(EX(This)) == IS_OBJECT) {
@@ -2329,8 +2333,11 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 	old_cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	old_type = ZEND_FFI_TYPE(old_cdata->type);
+	ptr = old_cdata->ptr;
 
-	if (ZEND_FFI_TYPE(dcl.type)->size > old_type->size) {
+	if (deref && old_type->kind == ZEND_FFI_TYPE_POINTER) {
+		ptr = *(void**)ptr;
+	} else if (ZEND_FFI_TYPE(dcl.type)->size > old_type->size) {
 		zend_throw_error(zend_ffi_exception_ce, "attempt to cast to larger type");
 		return;
 	}
@@ -2340,11 +2347,11 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		cdata->std.handlers = &zend_ffi_cdata_value_handlers;
 	}
 	cdata->type = dcl.type;
-	cdata->ptr = old_cdata->ptr;
+	cdata->ptr = ptr;
 	cdata->owned_ptr = 0;
 	cdata->is_const = (dcl.attr & ZEND_FFI_ATTR_CONST) != 0;
 
-	if (old_cdata->owned_ptr) {
+	if (old_cdata->owned_ptr && !(deref && old_type->kind == ZEND_FFI_TYPE_POINTER)) {
 		if (GC_REFCOUNT(&old_cdata->std) == 1) {
 			/* transfer ownership */
 			old_cdata->owned_ptr = 0;
