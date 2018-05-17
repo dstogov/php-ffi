@@ -1487,7 +1487,7 @@ static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **c
 }
 /* }}} */
 
-static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_type, void *pass_val) /* {{{ */
+static int zend_ffi_pass_arg(zval *arg, zend_ffi_type *type, ffi_type **pass_type, void **arg_values, uint32_t n) /* {{{ */
 {
 	zend_long lval;
 	double dval;
@@ -1501,78 +1501,78 @@ again:
 		case ZEND_FFI_TYPE_FLOAT:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_float;
-			*(float*)pass_val = (float)dval;
+			*(float*)arg_values[n] = (float)dval;
 			break;
 		case ZEND_FFI_TYPE_DOUBLE:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_double;
-			*(double*)pass_val = dval;
+			*(double*)arg_values[n] = dval;
 			break;
 #ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
 			dval = zval_get_double(arg);
 			*pass_type = &ffi_type_double;
-			*(long double*)pass_val = (long double)dval;
+			*(long double*)arg_values[n] = (long double)dval;
 			break;
 #endif
 		case ZEND_FFI_TYPE_UINT8:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_uint8;
-			*(uint8_t*)pass_val = (uint8_t)lval;
+			*(uint8_t*)arg_values[n] = (uint8_t)lval;
 			break;
 		case ZEND_FFI_TYPE_SINT8:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_sint8;
-			*(int8_t*)pass_val = (int8_t)lval;
+			*(int8_t*)arg_values[n] = (int8_t)lval;
 			break;
 		case ZEND_FFI_TYPE_UINT16:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_uint16;
-			*(uint16_t*)pass_val = (uint16_t)lval;
+			*(uint16_t*)arg_values[n] = (uint16_t)lval;
 			break;
 		case ZEND_FFI_TYPE_SINT16:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_sint16;
-			*(int16_t*)pass_val = (int16_t)lval;
+			*(int16_t*)arg_values[n] = (int16_t)lval;
 			break;
 		case ZEND_FFI_TYPE_UINT32:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_uint32;
-			*(uint32_t*)pass_val = (uint32_t)lval;
+			*(uint32_t*)arg_values[n] = (uint32_t)lval;
 			break;
 		case ZEND_FFI_TYPE_SINT32:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_sint32;
-			*(int32_t*)pass_val = (int32_t)lval;
+			*(int32_t*)arg_values[n] = (int32_t)lval;
 			break;
 		case ZEND_FFI_TYPE_UINT64:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_uint64;
-			*(uint64_t*)pass_val = (uint64_t)lval;
+			*(uint64_t*)arg_values[n] = (uint64_t)lval;
 			break;
 		case ZEND_FFI_TYPE_SINT64:
 			lval = zval_get_long(arg);
 			*pass_type = &ffi_type_sint64;
-			*(int64_t*)pass_val = (int64_t)lval;
+			*(int64_t*)arg_values[n] = (int64_t)lval;
 			break;
 		case ZEND_FFI_TYPE_POINTER:
 			*pass_type = &ffi_type_pointer;
 			if (Z_TYPE_P(arg) == IS_NULL) {
-				*(void**)pass_val = NULL;
+				*(void**)arg_values[n] = NULL;
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_STRING
 			        && ((ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_CHAR)
 			         || (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_VOID))) {
-				*(void**)pass_val = Z_STRVAL_P(arg);
+				*(void**)arg_values[n] = Z_STRVAL_P(arg);
 				return SUCCESS;
 			} else if (Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
 				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
 
 				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 					if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
-						*(void**)pass_val = *(void**)cdata->ptr;
+						*(void**)arg_values[n] = *(void**)cdata->ptr;
 					} else {
-						*(void**)pass_val = cdata->ptr;
+						*(void**)arg_values[n] = cdata->ptr;
 					}
 					return SUCCESS;
 				}
@@ -1581,7 +1581,7 @@ again:
 				void *callback = zend_ffi_create_callback(ZEND_FFI_TYPE(type->pointer.type), arg);
 
 				if (callback) {
-					*(void**)pass_val = callback;
+					*(void**)arg_values[n] = callback;
 					break;
 				} else {
 					return FAILURE;
@@ -1592,12 +1592,12 @@ again:
 			return FAILURE;
 		case ZEND_FFI_TYPE_BOOL:
 			*pass_type = &ffi_type_uint8;
-			*(uint8_t*)pass_val = zend_is_true(arg);
+			*(uint8_t*)arg_values[n] = zend_is_true(arg);
 			break;
 		case ZEND_FFI_TYPE_CHAR:
 			str = zval_get_tmp_string(arg, &tmp_str);
 			*pass_type = &ffi_type_sint8;
-			*(char*)pass_val = ZSTR_VAL(str)[0];
+			*(char*)arg_values[n] = ZSTR_VAL(str)[0];
 			if (ZSTR_LEN(str) != 1) {
 				zend_throw_error(zend_ffi_exception_ce, "Attempt to pass incompatible C type");
 			}
@@ -1607,6 +1607,71 @@ again:
 			kind = type->enumeration.kind;
 			goto again;
 		case ZEND_FFI_TYPE_STRUCT:
+			if (!(type->attr & ZEND_FFI_ATTR_UNION)
+			 && Z_TYPE_P(arg) == IS_OBJECT && Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
+
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+				    /* Create a fake structure type */
+					ffi_type *t = emalloc(sizeof(ffi_type) + sizeof(ffi_type*) * (zend_hash_num_elements(&type->record.fields) + 1));
+					int i;
+					zend_ffi_field *field;
+
+					t->size = type->size;
+					t->alignment = type->align;
+					t->type = FFI_TYPE_STRUCT;
+					t->elements = (ffi_type**)(t + 1);
+					i = 0;
+					ZEND_HASH_FOREACH_PTR(&type->record.fields, field) {
+						switch (ZEND_FFI_TYPE(field->type)->kind) {
+							case ZEND_FFI_TYPE_FLOAT:
+								t->elements[i] = &ffi_type_float;
+								break;
+							case ZEND_FFI_TYPE_DOUBLE:
+								t->elements[i] = &ffi_type_double;
+								break;
+#ifndef PHP_WIN32
+							case ZEND_FFI_TYPE_LONGDOUBLE:
+								t->elements[i] = &ffi_type_longdouble;
+								break;
+#endif
+							case ZEND_FFI_TYPE_SINT8:
+							case ZEND_FFI_TYPE_UINT8:
+							case ZEND_FFI_TYPE_BOOL:
+							case ZEND_FFI_TYPE_CHAR:
+								t->elements[i] = &ffi_type_uint8;
+								break;
+							case ZEND_FFI_TYPE_SINT16:
+							case ZEND_FFI_TYPE_UINT16:
+								t->elements[i] = &ffi_type_uint16;
+								break;
+							case ZEND_FFI_TYPE_SINT32:
+							case ZEND_FFI_TYPE_UINT32:
+								t->elements[i] = &ffi_type_uint32;
+								break;
+							case ZEND_FFI_TYPE_SINT64:
+							case ZEND_FFI_TYPE_UINT64:
+								t->elements[i] = &ffi_type_uint64;
+								break;
+							case ZEND_FFI_TYPE_POINTER:
+								t->elements[i] = &ffi_type_pointer;
+								break;
+							default:
+								efree(t);
+								zend_throw_error(zend_ffi_exception_ce, "Passing incompatible struct/union");
+								return FAILURE;
+						}
+						i++;
+					} ZEND_HASH_FOREACH_END();
+					t->elements[i] = NULL;
+					*pass_type = t;
+					arg_values[n] = cdata->ptr;
+					break;
+				} else {
+					zend_throw_error(zend_ffi_exception_ce, "Passing incompatible struct/union");
+					return FAILURE;
+				}
+			}
 			zend_throw_error(zend_ffi_exception_ce, "FFI passing struct/union is not implemented");
 			return FAILURE;
 		case ZEND_FFI_TYPE_ARRAY:
@@ -1692,7 +1757,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 				ZEND_HASH_FOREACH_PTR(type->func.args, arg_type) {
 					arg_type = ZEND_FFI_TYPE(arg_type);
 					arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
-					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
+					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values, n) != SUCCESS) {
 						free_alloca(arg_types, arg_types_use_heap);
 						free_alloca(arg_values, arg_values_use_heap);
 						return;
@@ -1736,7 +1801,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 				ZEND_HASH_FOREACH_PTR(type->func.args, arg_type) {
 					arg_type = ZEND_FFI_TYPE(arg_type);
 					arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
-					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values[n]) != SUCCESS) {
+					if (zend_ffi_pass_arg(EX_VAR_NUM(n), arg_type, &arg_types[n], arg_values, n) != SUCCESS) {
 						free_alloca(arg_types, arg_types_use_heap);
 						free_alloca(arg_values, arg_values_use_heap);
 						return;
@@ -1760,6 +1825,12 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 	}
 
 	ffi_call(&cif, addr, &ret, arg_values);
+
+	for (n = 0; n < cif.nargs; n++) {
+		if (cif.arg_types[n]->type == FFI_TYPE_STRUCT) {
+			efree(cif.arg_types[n]);
+		}
+	}
 
 	if (EX_NUM_ARGS()) {
 		free_alloca(arg_types, arg_types_use_heap);
