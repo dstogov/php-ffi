@@ -240,6 +240,63 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 }
 /* }}} */
 
+static ffi_type *zend_ffi_make_fake_struct_type(zend_ffi_type *type) /* {{{ */
+{
+	ffi_type *t = emalloc(sizeof(ffi_type) + sizeof(ffi_type*) * (zend_hash_num_elements(&type->record.fields) + 1));
+	int i;
+	zend_ffi_field *field;
+
+	t->size = type->size;
+	t->alignment = type->align;
+	t->type = FFI_TYPE_STRUCT;
+	t->elements = (ffi_type**)(t + 1);
+	i = 0;
+	ZEND_HASH_FOREACH_PTR(&type->record.fields, field) {
+		switch (ZEND_FFI_TYPE(field->type)->kind) {
+			case ZEND_FFI_TYPE_FLOAT:
+				t->elements[i] = &ffi_type_float;
+				break;
+			case ZEND_FFI_TYPE_DOUBLE:
+				t->elements[i] = &ffi_type_double;
+				break;
+#ifndef PHP_WIN32
+			case ZEND_FFI_TYPE_LONGDOUBLE:
+				t->elements[i] = &ffi_type_longdouble;
+				break;
+#endif
+			case ZEND_FFI_TYPE_SINT8:
+			case ZEND_FFI_TYPE_UINT8:
+			case ZEND_FFI_TYPE_BOOL:
+			case ZEND_FFI_TYPE_CHAR:
+				t->elements[i] = &ffi_type_uint8;
+				break;
+			case ZEND_FFI_TYPE_SINT16:
+			case ZEND_FFI_TYPE_UINT16:
+				t->elements[i] = &ffi_type_uint16;
+				break;
+			case ZEND_FFI_TYPE_SINT32:
+			case ZEND_FFI_TYPE_UINT32:
+				t->elements[i] = &ffi_type_uint32;
+				break;
+			case ZEND_FFI_TYPE_SINT64:
+			case ZEND_FFI_TYPE_UINT64:
+				t->elements[i] = &ffi_type_uint64;
+				break;
+			case ZEND_FFI_TYPE_POINTER:
+				t->elements[i] = &ffi_type_pointer;
+				break;
+			default:
+				efree(t);
+				zend_throw_error(zend_ffi_exception_ce, "Passing incompatible struct/union");
+				return NULL;
+			}
+		i++;
+	} ZEND_HASH_FOREACH_END();
+	t->elements[i] = NULL;
+	return t;
+}
+/* }}} */
+
 static ffi_type *zend_ffi_get_type(zend_ffi_type *type) /* {{{ */
 {
 	zend_ffi_type_kind kind = type->kind;
@@ -282,6 +339,12 @@ again:
 			kind = type->enumeration.kind;
 			goto again;
 		case ZEND_FFI_TYPE_STRUCT:
+			if (!(type->attr & ZEND_FFI_ATTR_UNION)) {
+				ffi_type *t = zend_ffi_make_fake_struct_type(type);
+				if (t) {
+					return t;
+				}
+			}
 			zend_throw_error(zend_ffi_exception_ce, "FFI return struct/union is not implemented");
 			break;
 		case ZEND_FFI_TYPE_ARRAY:
@@ -370,6 +433,10 @@ again:
 			cdata->ptr = emalloc(sizeof(void*));
 			cdata->flags |= ZEND_FFI_FLAG_OWNED;
 			*(void**)cdata->ptr = *(void**)ptr;
+		} else if (is_ret && type->kind == ZEND_FFI_TYPE_STRUCT) {
+			cdata->ptr = emalloc(type->size);
+			cdata->flags |= ZEND_FFI_FLAG_OWNED;
+			memcpy(cdata->ptr, ptr, type->size);
 		} else {
 			cdata->ptr = ptr;
 		}
@@ -1613,57 +1680,10 @@ again:
 
 				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
 				    /* Create a fake structure type */
-					ffi_type *t = emalloc(sizeof(ffi_type) + sizeof(ffi_type*) * (zend_hash_num_elements(&type->record.fields) + 1));
-					int i;
-					zend_ffi_field *field;
-
-					t->size = type->size;
-					t->alignment = type->align;
-					t->type = FFI_TYPE_STRUCT;
-					t->elements = (ffi_type**)(t + 1);
-					i = 0;
-					ZEND_HASH_FOREACH_PTR(&type->record.fields, field) {
-						switch (ZEND_FFI_TYPE(field->type)->kind) {
-							case ZEND_FFI_TYPE_FLOAT:
-								t->elements[i] = &ffi_type_float;
-								break;
-							case ZEND_FFI_TYPE_DOUBLE:
-								t->elements[i] = &ffi_type_double;
-								break;
-#ifndef PHP_WIN32
-							case ZEND_FFI_TYPE_LONGDOUBLE:
-								t->elements[i] = &ffi_type_longdouble;
-								break;
-#endif
-							case ZEND_FFI_TYPE_SINT8:
-							case ZEND_FFI_TYPE_UINT8:
-							case ZEND_FFI_TYPE_BOOL:
-							case ZEND_FFI_TYPE_CHAR:
-								t->elements[i] = &ffi_type_uint8;
-								break;
-							case ZEND_FFI_TYPE_SINT16:
-							case ZEND_FFI_TYPE_UINT16:
-								t->elements[i] = &ffi_type_uint16;
-								break;
-							case ZEND_FFI_TYPE_SINT32:
-							case ZEND_FFI_TYPE_UINT32:
-								t->elements[i] = &ffi_type_uint32;
-								break;
-							case ZEND_FFI_TYPE_SINT64:
-							case ZEND_FFI_TYPE_UINT64:
-								t->elements[i] = &ffi_type_uint64;
-								break;
-							case ZEND_FFI_TYPE_POINTER:
-								t->elements[i] = &ffi_type_pointer;
-								break;
-							default:
-								efree(t);
-								zend_throw_error(zend_ffi_exception_ce, "Passing incompatible struct/union");
-								return FAILURE;
-						}
-						i++;
-					} ZEND_HASH_FOREACH_END();
-					t->elements[i] = NULL;
+					ffi_type *t = zend_ffi_make_fake_struct_type(type);
+					if (!t) {
+						return FAILURE;
+					}
 					*pass_type = t;
 					arg_values[n] = cdata->ptr;
 					break;
@@ -1826,10 +1846,13 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 
 	ffi_call(&cif, addr, &ret, arg_values);
 
-	for (n = 0; n < cif.nargs; n++) {
-		if (cif.arg_types[n]->type == FFI_TYPE_STRUCT) {
-			efree(cif.arg_types[n]);
+	for (n = 0; n < arg_count; n++) {
+		if (arg_types[n]->type == FFI_TYPE_STRUCT) {
+			efree(arg_types[n]);
 		}
+	}
+	if (ret_type->type == FFI_TYPE_STRUCT) {
+		efree(ret_type);
 	}
 
 	if (EX_NUM_ARGS()) {
