@@ -220,6 +220,10 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 			} else if (dst_type->kind == ZEND_FFI_TYPE_POINTER) {
 				dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
 				src_type = ZEND_FFI_TYPE(src_type->pointer.type);
+				if (dst_type->kind == ZEND_FFI_TYPE_VOID ||
+				    src_type->kind == ZEND_FFI_TYPE_VOID) {
+				    return 1;
+				}
 			} else if (dst_type->kind == ZEND_FFI_TYPE_ARRAY &&
 			           (dst_type->array.length == src_type->array.length ||
 			            dst_type->array.length == 0)) {
@@ -232,6 +236,9 @@ static int zend_ffi_is_compatible_type(zend_ffi_type *dst_type, zend_ffi_type *s
 		           src_type->kind == ZEND_FFI_TYPE_ARRAY) {
 			dst_type = ZEND_FFI_TYPE(dst_type->pointer.type);
 			src_type = ZEND_FFI_TYPE(src_type->array.type);
+			if (dst_type->kind == ZEND_FFI_TYPE_VOID) {
+			    return 1;
+			}
 		} else {
 			break;
 		}
