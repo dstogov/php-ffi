@@ -1178,6 +1178,12 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
 				*is_temp = 1;
 				return ht;
+			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_VOID) {
+				ZVAL_LONG(&tmp, (uintptr_t)*(void**)ptr);
+				ht = zend_new_array(1);
+				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
+				*is_temp = 1;
+				return ht;
 			} else if (zend_ffi_cdata_to_zval(NULL, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp, 1, 0) == SUCCESS) {
 				ht = zend_new_array(1);
 				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
