@@ -1317,6 +1317,56 @@ static void zend_ffi_ctype_free_obj(zend_object *object) /* {{{ */
 }
 /* }}} */
 
+static int zend_ffi_is_same_type(zend_ffi_type *type1, zend_ffi_type *type2) /* {{{ */
+{
+	while (1) {
+		if (type1 == type2) {
+			return 1;
+		} else if (type1->kind == type2->kind) {
+			if (type1->kind < ZEND_FFI_TYPE_POINTER) {
+				return 1;
+			} else if (type1->kind == ZEND_FFI_TYPE_POINTER) {
+				type1 = ZEND_FFI_TYPE(type1->pointer.type);
+				type2 = ZEND_FFI_TYPE(type2->pointer.type);
+				if (type1->kind == ZEND_FFI_TYPE_VOID ||
+				    type2->kind == ZEND_FFI_TYPE_VOID) {
+				    return 1;
+				}
+			} else if (type1->kind == ZEND_FFI_TYPE_ARRAY &&
+			           type1->array.length == type2->array.length) {
+				type1 = ZEND_FFI_TYPE(type1->array.type);
+				type2 = ZEND_FFI_TYPE(type2->array.type);
+			} else {
+				break;
+			}
+		} else {
+			break;
+		}
+	}
+	return 0;
+}
+/* }}} */
+
+static int zend_ffi_ctype_compare_objects(zval *o1, zval *o2) /* {{{ */
+{
+	if (Z_TYPE_P(o1) == IS_OBJECT && Z_OBJCE_P(o1) == zend_ffi_ctype_ce &&
+	    Z_TYPE_P(o2) == IS_OBJECT && Z_OBJCE_P(o2) == zend_ffi_ctype_ce) {
+		zend_ffi_ctype *ctype1 = (zend_ffi_ctype*)Z_OBJ_P(o1);
+		zend_ffi_ctype *ctype2 = (zend_ffi_ctype*)Z_OBJ_P(o2);
+		zend_ffi_type *type1 = ZEND_FFI_TYPE(ctype1->type);
+		zend_ffi_type *type2 = ZEND_FFI_TYPE(ctype2->type);
+
+		if (zend_ffi_is_same_type(type1, type2)) {
+			return 0;
+		} else {
+			return 1;
+		}
+	}
+	zend_throw_error(zend_ffi_exception_ce, "Comparison of incompatible C types");
+	return 0;
+}
+/* }}} */
+
 static HashTable *zend_ffi_ctype_get_debug_info(zval *object, int *is_temp) /* {{{ */
 {
 	return NULL;
@@ -2581,23 +2631,20 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 ZEND_METHOD(FFI, type) /* {{{ */
 {
-	zend_string *type_def = NULL;
-	zval *ztype;
-	zend_ffi_type *type;
+	zval *zv;
 	zend_ffi_ctype *ctype;
+	zend_ffi_type *type;
 	HashTable *dims = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(1, 2)
-		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
-			Z_PARAM_STR(type_def)
-		} else {
-			Z_PARAM_OBJECT_OF_CLASS(ztype, zend_ffi_ctype_ce)
-		}
+		Z_PARAM_ZVAL(zv);
 		Z_PARAM_OPTIONAL
 		Z_PARAM_ARRAY_HT(dims)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (type_def) {
+	if (Z_TYPE_P(zv) == IS_STRING) {
+		zend_string *type_def = Z_STR_P(zv);
+
 		zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
 
 		if (Z_TYPE(EX(This)) == IS_OBJECT) {
@@ -2640,10 +2687,17 @@ ZEND_METHOD(FFI, type) /* {{{ */
 		FFI_G(tags) = NULL;
 
 		type = dcl.type;
-	} else {
-		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(ztype);
+	} else if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_ctype_ce) {
+		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(zv);
 
 		type = ZEND_FFI_TYPE(ctype->type);
+	} else if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
+		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
+
+		type = ZEND_FFI_TYPE(cdata->type);
+	} else {
+		zend_wrong_parameter_class_error(1, "FFI\\CData, FFI\\CType or string", zv);
+		return;
 	}
 
 	if (dims) {
@@ -3628,7 +3682,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_ctype_handlers.has_dimension        = NULL;
 	zend_ffi_ctype_handlers.unset_dimension      = NULL;
 	zend_ffi_ctype_handlers.get_method           = NULL;
-	zend_ffi_ctype_handlers.compare_objects      = NULL;
+	zend_ffi_ctype_handlers.compare_objects      = zend_ffi_ctype_compare_objects;
 	zend_ffi_ctype_handlers.cast_object          = NULL;
 	zend_ffi_ctype_handlers.count_elements       = NULL;
 	zend_ffi_ctype_handlers.get_debug_info       = zend_ffi_ctype_get_debug_info;
