@@ -11,16 +11,16 @@ $m[1] = $v;
 var_dump($m);
 ?>
 --EXPECTF--
-object(FFI\CData)#%d (2) {
+object(FFI\CData:int32_t[2][2])#%d (2) {
   [0]=>
-  object(FFI\CData)#%d (2) {
+  object(FFI\CData:int32_t[2])#%d (2) {
     [0]=>
     int(0)
     [1]=>
     int(0)
   }
   [1]=>
-  object(FFI\CData)#%d (2) {
+  object(FFI\CData:int32_t[2])#%d (2) {
     [0]=>
     int(0)
     [1]=>

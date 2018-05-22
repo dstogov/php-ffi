@@ -27,7 +27,7 @@ FFI 024: anonymous struct/union
 ?>
 --EXPECTF--
 int(20)
-object(FFI\CData)#%d (6) {
+object(FFI\CData:<struct>)#%d (6) {
   ["a"]=>
   int(1)
   ["b"]=>

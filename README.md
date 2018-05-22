@@ -42,7 +42,7 @@ string(135) "/usr/lib64/qt-3.3/bin:/usr/lib64/ccache:/usr/local/bin:/usr/bin:/bi
 int(1523617815)
 int(1523617815)
 int(977765)
-object(FFI\CData)#3 (2) {
+object(FFI\CData:<struct>)#3 (2) {
   ["tz_minuteswest"]=>
   int(-180)
   ["tz_dsttime"]=>
@@ -65,16 +65,16 @@ var_dump($p);
 ```
 
 ```
-object(FFI\CData)#1 (2) {
+object(FFI\CData:<struct>[2])#1 (2) {
   [0]=>
-  object(FFI\CData)#2 (2) {
+  object(FFI\CData:<struct>)#2 (2) {
     ["x"]=>
     int(5)
     ["y"]=>
     int(0)
   }
   [1]=>
-  object(FFI\CData)#3 (2) {
+  object(FFI\CData:<struct>)#3 (2) {
     ["x"]=>
     int(0)
     ["y"]=>

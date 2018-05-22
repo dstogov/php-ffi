@@ -12,16 +12,16 @@ FFI::free($v[1]);
 var_dump($v);
 ?>
 --EXPECTF--
-object(FFI\CData)#%d (2) {
+object(FFI\CData:int32_t*[2])#%d (2) {
   [0]=>
   NULL
   [1]=>
-  object(FFI\CData)#%d (1) {
-    ["cptr"]=>
+  object(FFI\CData:int32_t*)#%d (1) {
+    [0]=>
     int(42)
   }
 }
-object(FFI\CData)#%d (2) {
+object(FFI\CData:int32_t*[2])#%d (2) {
   [0]=>
   NULL
   [1]=>

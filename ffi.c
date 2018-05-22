@@ -1009,6 +1009,189 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 }
 /* }}} */
 
+#define MAX_TYPE_NAME_LEN 256
+
+typedef struct _zend_ffi_ctype_name_buf {
+	char *start;
+	char *end;
+	char buf[MAX_TYPE_NAME_LEN];
+} zend_ffi_ctype_name_buf;
+
+static int zend_ffi_ctype_name_prepend(zend_ffi_ctype_name_buf *buf, const char *str, size_t len) /* {{{ */
+{
+	buf->start -= len;
+	if (buf->start < buf->buf) {
+		return 0;
+	}
+	memcpy(buf->start, str, len);
+	return 1;
+}
+/* }}} */
+
+static int zend_ffi_ctype_name_append(zend_ffi_ctype_name_buf *buf, const char *str, size_t len) /* {{{ */
+{
+	if (buf->end + len > buf->buf + MAX_TYPE_NAME_LEN) {
+		return 0;
+	}
+	memcpy(buf->end, str, len);
+	buf->end += len;
+	return 1;
+}
+/* }}} */
+
+static int zend_ffi_ctype_name(zend_ffi_ctype_name_buf *buf, const zend_ffi_type *type) /* {{{ */
+{
+	const char *name = NULL;
+	int is_ptr = 0;
+
+	while (1) {
+		switch (type->kind) {
+			case ZEND_FFI_TYPE_VOID:
+				name = "void";
+				break;
+			case ZEND_FFI_TYPE_FLOAT:
+				name = "float";
+				break;
+			case ZEND_FFI_TYPE_DOUBLE:
+				name = "double";
+				break;
+#ifdef HAVE_LONG_DOUBLE
+			case ZEND_FFI_TYPE_LONGDOUBLE:
+				name = "long double";
+				break;
+#endif
+			case ZEND_FFI_TYPE_UINT8:
+				name = "uint8_t";
+				break;
+			case ZEND_FFI_TYPE_SINT8:
+				name = "int8_t";
+				break;
+			case ZEND_FFI_TYPE_UINT16:
+				name = "uint16_t";
+				break;
+			case ZEND_FFI_TYPE_SINT16:
+				name = "int16_t";
+				break;
+			case ZEND_FFI_TYPE_UINT32:
+				name = "uint32_t";
+				break;
+			case ZEND_FFI_TYPE_SINT32:
+				name = "int32_t";
+				break;
+			case ZEND_FFI_TYPE_UINT64:
+				name = "uint64_t";
+				break;
+			case ZEND_FFI_TYPE_SINT64:
+				name = "int64_t";
+				break;
+			case ZEND_FFI_TYPE_ENUM:
+				name = "<enum>";
+				break;
+			case ZEND_FFI_TYPE_BOOL:
+				name = "bool";
+				break;
+			case ZEND_FFI_TYPE_CHAR:
+				name = "char";
+				break;
+			case ZEND_FFI_TYPE_POINTER:
+				if (!zend_ffi_ctype_name_prepend(buf, "*", 1)) {
+					return 0;
+				}
+				is_ptr = 1;
+				type = ZEND_FFI_TYPE(type->pointer.type);
+				break;
+			case ZEND_FFI_TYPE_FUNC:
+				if (is_ptr) {
+					is_ptr = 0;
+					if (!zend_ffi_ctype_name_prepend(buf, "(", 1)
+					 || !zend_ffi_ctype_name_append(buf, ")", 1)) {
+						return 0;
+					}
+				}
+				if (!zend_ffi_ctype_name_append(buf, "(", 1)
+				 || !zend_ffi_ctype_name_append(buf, ")", 1)) {
+					return 0;
+				}
+				type = ZEND_FFI_TYPE(type->func.ret_type);
+				break;
+			case ZEND_FFI_TYPE_ARRAY:
+				if (is_ptr) {
+					is_ptr = 0;
+					if (!zend_ffi_ctype_name_prepend(buf, "(", 1)
+					 || !zend_ffi_ctype_name_append(buf, ")", 1)) {
+						return 0;
+					}
+				}
+				if (!zend_ffi_ctype_name_append(buf, "[", 1)) {
+					return 0;
+				}
+				if (type->attr & ZEND_FFI_ATTR_VLA) {
+					if (!zend_ffi_ctype_name_append(buf, "*", 1)) {
+						return 0;
+					}
+				} else if (!(type->attr & ZEND_FFI_ATTR_INCOMPLETE_ARRAY)) {
+					char str[MAX_LENGTH_OF_LONG + 1];
+					char *s = zend_print_long_to_buf(str + sizeof(str) - 1, type->array.length);
+
+					if (!zend_ffi_ctype_name_append(buf, s, strlen(s))) {
+						return 0;
+					}
+				}
+				if (!zend_ffi_ctype_name_append(buf, "]", 1)) {
+					return 0;
+				}
+				type = ZEND_FFI_TYPE(type->array.type);
+				break;
+			case ZEND_FFI_TYPE_STRUCT:
+				if (type->attr & ZEND_FFI_ATTR_UNION) {
+					name = "<union>";
+				} else {
+					name = "<struct>";
+				}
+				break;
+			default:
+				ZEND_ASSERT(0);
+		}
+		if (name) {
+			break;
+		}
+	}
+
+//	if (buf->start != buf->end && *buf->start != '[') {
+//		if (!zend_ffi_ctype_name_prepend(buf, " ", 1)) {
+//			return 0;
+//		}
+//	}
+	return zend_ffi_ctype_name_prepend(buf, name, strlen(name));
+}
+/* }}} */
+
+static zend_string *zend_ffi_get_class_name(zend_string *prefix, const zend_ffi_type *type) /* {{{ */
+{
+	zend_ffi_ctype_name_buf buf;
+
+	buf.start = buf.end = buf.buf + ((MAX_TYPE_NAME_LEN * 3) / 4);
+	if (!zend_ffi_ctype_name(&buf, type)) {
+		return zend_string_copy(prefix);
+	} else {
+		zend_string *name = zend_string_alloc(ZSTR_LEN(prefix) + 1 + buf.end - buf.start, 0);
+		memcpy(ZSTR_VAL(name), ZSTR_VAL(prefix), ZSTR_LEN(prefix));
+		ZSTR_VAL(name)[ZSTR_LEN(prefix)] = ':';
+		memcpy(ZSTR_VAL(name) + ZSTR_LEN(prefix) + 1, buf.start, buf.end - buf.start);
+		ZSTR_VAL(name)[ZSTR_LEN(name)] = 0;
+		return name;
+	}
+}
+/* }}} */
+
+static zend_string *zend_ffi_cdata_get_class_name(const zend_object *zobj) /* {{{ */
+{
+	zend_ffi_cdata *cdata = (zend_ffi_cdata*)zobj;
+
+	return zend_ffi_get_class_name(zobj->ce->name, ZEND_FFI_TYPE(cdata->type));
+}
+/* }}} */
+
 static int zend_ffi_cdata_compare_objects(zval *o1, zval *o2) /* {{{ */
 {
 	if (Z_TYPE_P(o1) == IS_OBJECT && Z_OBJCE_P(o1) == zend_ffi_cdata_ce &&
@@ -1182,18 +1365,18 @@ static HashTable *zend_ffi_cdata_get_debug_info(zval *object, int *is_temp) /* {
 			if (*(void**)ptr == NULL) {
 				ZVAL_NULL(&tmp);
 				ht = zend_new_array(1);
-				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
+				zend_hash_index_add_new(ht, 0, &tmp);
 				*is_temp = 1;
 				return ht;
 			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_VOID) {
 				ZVAL_LONG(&tmp, (uintptr_t)*(void**)ptr);
 				ht = zend_new_array(1);
-				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
+				zend_hash_index_add_new(ht, 0, &tmp);
 				*is_temp = 1;
 				return ht;
 			} else if (zend_ffi_cdata_to_zval(NULL, *(void**)ptr, ZEND_FFI_TYPE(type->pointer.type), BP_VAR_R, &tmp, 1, 0) == SUCCESS) {
 				ht = zend_new_array(1);
-				zend_hash_str_add(ht, "cptr", sizeof("cptr")-1, &tmp);
+				zend_hash_index_add_new(ht, 0, &tmp);
 				*is_temp = 1;
 				return ht;
 			}
@@ -1344,6 +1527,14 @@ static int zend_ffi_is_same_type(zend_ffi_type *type1, zend_ffi_type *type2) /* 
 		}
 	}
 	return 0;
+}
+/* }}} */
+
+static zend_string *zend_ffi_ctype_get_class_name(const zend_object *zobj) /* {{{ */
+{
+	zend_ffi_ctype *ctype = (zend_ffi_ctype*)zobj;
+
+	return zend_ffi_get_class_name(zobj->ce->name, ZEND_FFI_TYPE(ctype->type));
 }
 /* }}} */
 
@@ -3633,6 +3824,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.has_dimension        = NULL;
 	zend_ffi_cdata_handlers.unset_dimension      = NULL;
 	zend_ffi_cdata_handlers.get_method           = NULL;
+	zend_ffi_cdata_handlers.get_class_name       = zend_ffi_cdata_get_class_name;
 	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_handlers.cast_object          = zend_ffi_cdata_cast_object;
 	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
@@ -3655,6 +3847,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_value_handlers.has_dimension        = NULL;
 	zend_ffi_cdata_value_handlers.unset_dimension      = NULL;
 	zend_ffi_cdata_value_handlers.get_method           = NULL;
+	zend_ffi_cdata_value_handlers.get_class_name       = zend_ffi_cdata_get_class_name;
 	zend_ffi_cdata_value_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_value_handlers.cast_object          = NULL;
 	zend_ffi_cdata_value_handlers.count_elements       = NULL;
@@ -3682,6 +3875,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_ctype_handlers.has_dimension        = NULL;
 	zend_ffi_ctype_handlers.unset_dimension      = NULL;
 	zend_ffi_ctype_handlers.get_method           = NULL;
+	zend_ffi_ctype_handlers.get_class_name       = zend_ffi_ctype_get_class_name;
 	zend_ffi_ctype_handlers.compare_objects      = zend_ffi_ctype_compare_objects;
 	zend_ffi_ctype_handlers.cast_object          = NULL;
 	zend_ffi_ctype_handlers.count_elements       = NULL;

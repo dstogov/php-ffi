@@ -13,7 +13,7 @@ var_dump($p[1]);
 ?>
 --EXPECTF--
 int(2)
-object(FFI\CData)#%d (2) {
+object(FFI\CData:bool[2])#%d (2) {
   [0]=>
   bool(false)
   [1]=>

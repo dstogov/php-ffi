@@ -17,7 +17,7 @@ var_dump($a);
 ?>
 --EXPECTF--
 int(-1)
-object(FFI\CData)#%d (4) {
+object(FFI\CData:int32_t[4])#%d (4) {
   [0]=>
   int(0)
   [1]=>
@@ -28,7 +28,7 @@ object(FFI\CData)#%d (4) {
   int(0)
 }
 int(0)
-object(FFI\CData)#%d (3) {
+object(FFI\CData:int32_t[3])#%d (3) {
   [0]=>
   int(-1)
   [1]=>
