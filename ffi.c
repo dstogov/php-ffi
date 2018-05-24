@@ -684,16 +684,16 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /
 again:
     switch (kind) {
 		case ZEND_FFI_TYPE_FLOAT:
-			dval = zval_get_long(value);
+			dval = zval_get_double(value);
 			*(float*)ptr = dval;
 			break;
 		case ZEND_FFI_TYPE_DOUBLE:
-			dval = zval_get_long(value);
+			dval = zval_get_double(value);
 			*(double*)ptr = dval;
 			break;
 #ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_TYPE_LONGDOUBLE:
-			dval = zval_get_long(value);
+			dval = zval_get_double(value);
 			*(long double*)ptr = dval;
 			break;
 #endif
