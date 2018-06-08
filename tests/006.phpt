@@ -5,7 +5,7 @@ FFI 006: Pointer assignment
 --FILE--
 <?php 
 $v = FFI::new("int*[2]");
-$v[1] = FFI::new("int[1]", false);
+$v[1] = FFI::own(FFI::new("int[1]"), false);
 $v[1][0] = 42;
 var_dump($v);
 FFI::free($v[1]);

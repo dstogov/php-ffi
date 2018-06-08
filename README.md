@@ -22,7 +22,7 @@ $libc = new FFI("
         int tz_dsttime;
     };
 
-	int gettimeofday(struct timeval *tv, struct timezone *tz);    
+	int gettimeofday(struct timeval *tv, struct timezone *tz);
 ", "libc.so.6");
 
 $libc->printf("Hello World from %s!\n", "PHP");
@@ -105,20 +105,36 @@ $libc = new FFI("extern int errno;", "libc.so.6");
 var_dump($libc->errno);
 ```
 
-##### function FFI::new(string $type = "" [, bool $owned = true]): FFI\CData
+##### function FFI::type(mixed $type): FFI\CType
 
-This function may be used to create a native data structure. The first argument is a C type definition. The following example creates two dimensional array of integers.
+This function returns a **FFI\CType** object that represent corresponding C type. The first argument may be a **string** (a new object is going to be created from this C definition) or **FFI\CData** object (function will return the type of the C data object).
+
+FFI::type() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+
+##### static function FFI::array(FFI\CType $type, array $dims): FFI\CType
+
+Constructs a new C array type from the existing one.
+
+##### function FFI::new(mixed $type [, bool $persistent = false]): FFI\CData
+
+This function may be used to create a native data structure. The first argument is a C type definition. It may be a **string** or **FFI\CType** object. The following example creates two dimensional array of integers.
 
 ```php
 $p = FFI::new("int[2][2]");
 var_dump($p, FFI::sizeof($p));
 ```
 
-FFI::new() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor. By default FFI::new() creates "owned" native data structures, that live together with corresponding PHP object, reusing PHP reference-counting and GC. However, in some cases it may be necessary to manually control the life time of the data structure. In this case, the second argument should be set to "false" and then the created object should be manually deallocated using FFI::free(). 
+FFI::new() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+
+Using the optional $persistent argument it's possible to allocate C objects in persistent memory, through malloc(), otherwise memory is allocated in PHP request heap, through emalloc().
+
+##### static function FFI::own(FFI\CData $cdata [, bool $own = true]): FFI\CData
+
+By default **FFI::new()** creates "owned" native data structures, that live together with corresponding PHP object, reusing PHP reference-counting and GC. However, in some cases it may be necessary to manually control the life time of the data structure. In this case, the PHP ownership on the corresponding data, may be manually changed, by **FFI::own(..., false)** and then manually deallocated using **FFI::free()**.
 
 ##### static function FFI::free(FFI\CData $cdata): void
 
-manually removes previously created "unowned" data structure.
+manually removes previously created "not-owned" data structure.
 
 ##### Read/Write Elements of Native Arrays
 
@@ -145,25 +161,21 @@ foreach($pp as $n => &$p) {
 var_dump($pp);
 ```
 
-##### function FFI::cast(string $type = "" , FFI\CData $cdata): FFI\CData
+##### static function FFI::sizeof(mixed $cdata_or_ctype): int
 
-...
+returns size of C data type of the given **FFI\CData** or **FFI\CType**.
 
-##### static function FFI::sizeof(FFI\CData $cdata): int
+##### static function FFI::alignof(mixed $cdata_or_ctype): int
 
-returns the size of corresponding native data structure.
+returns size of C data type of the given **FFI\CData** or **FFI\CType**.
 
-##### static function FFI::alignof(FFI\CData $cdata): int
+##### static function FFI::memcpy(FFI\CData $dst, mixed $src, int $size): void
 
-returns the alignment of corresponding native data structure.
+copies $size bytes from memory area $src to memory area $dst. $src may be any native data structure (**FFI\CData**) or PHP **string**.
 
-##### static function FFI::memcpy(FFI\CData $dst, $src, int $size): void
+##### static function FFI::memcmp(mixed $src1, mixed $src2, int $size): int
 
-copies $size bytes from memory area $src to memory area $dst. $src may be any native data structure or PHP string.
-
-##### static function FFI::memcmp($src1, $src2, int $size): int
-
-compares $size bytes from memory area $src1 and $dst2. $src1 and $src2 may be any native data structures or PHP strings.
+compares $size bytes from memory area $src1 and $dst2. $src1 and $src2 may be any native data structures (**FFI\CData**) or PHP **string**s.
 
 ##### static function FFI::memset(FFI\CData $dst, int $c, int $size): void
 
@@ -171,23 +183,97 @@ fills the $size bytes of the memory area pointed to by $dst with the constant by
 
 ##### static function FFI::string(FFI\CData $src [, int $size]): string
 
-creates a PHP string from $size bytes of memory area pointed by $src. If size is omitted, $src must be zero terminated.
+creates a PHP string from $size bytes of memory area pointed by $src. If size is omitted, $src must be zero terminated array of C chars.
 
-##### Native Pointers
+##### function FFI::cast(mixed $type, FFI\CData $cdata): FFI\CData
 
-...
+Casts given $cdata to another C type, specified by C declaration **string** or **FFI\CType** object.
 
-##### Calling Native Closures
+This function may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
 
-...
+##### static function addr(FFI\CData $cdata): FFI\CData;
+
+Returns C pointer to the given C data structure. The pointer is not "owned" and won't be free. Anyway, this is a potentially unsafe operation, because the life-time of the returned pointer may be longer than life-time of the source object, and this may cause dangling pointer dereference (like in regular C).
+
+##### static function offset(FFI\CData $cdata, int $offset): FFI\CData;
+
+This function implements C pointer arithmetic. Given $cdata must be a pointer or array and the function will return pointer representing ($cdata + $offset) operation. Again, this is a potentially unsafe operation, because the life-time of the returned pointer may be longer than life-time of the source object, and this may cause dangling pointer dereference
+
+##### static function load(string $filename): FFI;
+
+Instead of embedding of a long C definition into PHP string, and creating FFI through constructor, it's possible to separate it into a C header file. Note, that C preprocessor directives (e.g. #define or #ifdef) are not supported. And only a couple of special macros may be used especially for FFI.
+
+``` C
+#define FFI_LIB "libc.so.6"
+
+int printf(const char *format, ...);
+```
+
+Here, FFI_LIB specifies, that the given library should be loaded.
+
+``` php
+$ffi = FFI::load(__DIR__ . "/printf.h");
+$ffi->printf("Hello world!\n");
+
+```
+
+##### static function scope(string $name): FFI;
+
+FFI definition parsing and shared library loading may take significant time. It's not useful to do it on each HTTP request in WEB environment. However, it's possible to pre-load FFI definitions and libraries at php startup, and instantiate FFI objects when necessary. Header files may be extended with **FFI_SCOPE** define (default pre-loading scope is "C"). This name is going to be used as **FFI::scope()** argument. It's possible to pre-load few files into a single scope.
+
+``` C
+#define FFI_LIB "libc.so.6"
+#define FFI_SCOPE "libc"
+
+int printf(const char *format, ...);
+```
+
+These files are loaded through php.ini directive. It may be repeated few times.
+
+``` ini
+ffi.preload=/etc/php/ffi/printf.h
+```
+
+Finally, **FFI::scope()** instantiate an **FFI** object, that implements all C definition from the given scope.
+
+``` php
+$ffi = FFI::scope("libc");
+$ffi->printf("Hello world!\n");
+```
+
+##### Owned and Not-Owned CData
+
+FFI extension uses two kind of native C data structures. "Owned" pointers are created using **FFI::new()**, **clone**ed, or manually converted from "not-owned" by **FFI::own()**. Owned data is deallocated together with last PHP variable, that reference it. This mechanism reuses PHP reference-counting and garbage-collector.
+
+Elements of C arrays and structures, as well as most data structures returned by C functions are "not-owned". They work just as regular C pointers. They may leak memory, if not freed manually using **FFI::free()**, or may become dangling pointers and lead to PHP crashes.
+
+The following example demonstrates the problem.
+
+```php
+$p1 = FFI::new("int[2][2]"); // $p1 is owned pointer
+$p2 = $p1[0];                // $p2 is not-owned part of $p1
+unset($p1);                  // $p1 is deallocated ($p2 became dangling pointer)
+var_dump($p2);               // crash because dereferencing of dangling pointer
+```
+
+It's possible to change ownership, to avoid this crash, but this would require manual memory management and may lead to memory leaks
+
+```php
+$p1 = FFI::own(FFI::new("int[2][2]"), false); // $p1 is not-owned pointer
+$p2 = $p1[0];
+unset($p1);                                   // $p1 CData is keep alive (memory leak)
+var_dump($p2);                                // works fine, except of memory leak
+```
 
 ##### PHP Callbacks
 
-It's possible to assign PHP function to native function variable. This seems to work, but this functionality is not supported on all libffi platforms, it is not efficient and leaks resources by the end of request.
+It's possible to assign PHP function to native function variable (or pass it as a function argument). This seems to work, but this functionality is not supported on all libffi platforms, it is not efficient and leaks resources by the end of request.
 
 ### Status
 
 In current state, access to FFI data structures is significantly (about 2 times) slower, than access to PHP arrays and objects. It doesn't make no sense to use them for speed, but may make sense to reduce memory consumption.
+
+It may make sense to embed this FFI functionality into PHP-8 core, to provide better interpretation performance and integrate with JIT, providing almost C performance (similar to LuaJIT)
 
 ### Requiremnt
 
@@ -202,3 +288,7 @@ phpize
 make
 sudo make install
 ```
+
+### Real Usage
+
+FFI extension was used to implement [PHP TensorFlow binding](https://github.com/dstogov/php-tensorflow)
