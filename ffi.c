@@ -2709,7 +2709,15 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	} else {
 		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(ztype);
 
-		type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		if (ZEND_FFI_TYPE_IS_OWNED(ctype->type)
+		 && GC_REFCOUNT(&ctype->std) == 1) {
+			/* transfer type ownership */
+			type_ptr = ctype->type;
+			type = ZEND_FFI_TYPE(type_ptr);
+			ctype->type = type;
+		} else {
+			type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		}
 	}
 
 	ptr = pemalloc(type->size, flags & ZEND_FFI_FLAG_PERSISTENT);
@@ -2852,7 +2860,15 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	} else {
 		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(ztype);
 
-		type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		if (ZEND_FFI_TYPE_IS_OWNED(ctype->type)
+		 && GC_REFCOUNT(&ctype->std) == 1) {
+			/* transfer type ownership */
+			type_ptr = ctype->type;
+			type = ZEND_FFI_TYPE(type_ptr);
+			ctype->type = type;
+		} else {
+			type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		}
 	}
 
 	old_cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
