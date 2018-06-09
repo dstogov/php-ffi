@@ -271,9 +271,9 @@ It's possible to assign PHP function to native function variable (or pass it as 
 
 ### Status
 
-In current state, access to FFI data structures is significantly (about 2 times) slower, than access to PHP arrays and objects. It doesn't make no sense to use them for speed, but may make sense to reduce memory consumption.
+In current state, access to FFI data structures is significantly (about 2 times) slower, than access to PHP arrays and objects. It make no sense to use them for speed, but may make sense to reduce memory consumption.
 
-It may make sense to embed this FFI functionality into PHP-8 core, to provide better interpretation performance and integrate with JIT, providing almost C performance (similar to LuaJIT)
+FFI functionality may be included into PHP-8 core, to provide better interpretation performance and integrate with JIT, providing almost C performance (similar to LuaJIT)
 
 ### Requiremnt
 
