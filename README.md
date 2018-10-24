@@ -275,7 +275,7 @@ In current state, access to FFI data structures is significantly (about 2 times)
 
 FFI functionality may be included into PHP-8 core, to provide better interpretation performance and integrate with JIT, providing almost C performance (similar to LuaJIT)
 
-### Requiremnt
+### Requirement
 
 - php-master (7.3)
 - [libffi-3.*](http://sourceware.org/libffi/)
