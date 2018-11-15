@@ -796,13 +796,6 @@ again:
 }
 /* }}} */
 
-static ZEND_COLD zend_function *zend_ffi_cdata_get_constructor(zend_object *object) /* {{{ */
-{
-	zend_throw_error(zend_ffi_exception_ce, "Instantiation of 'CData' is not allowed");
-	return NULL;
-}
-/* }}} */
-
 static zval* zend_ffi_cdata_get(zval *object, zval *rv) /* {{{ */
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
@@ -1527,13 +1520,6 @@ static zend_object *zend_ffi_ctype_new(zend_class_entry *class_type) /* {{{ */
 	ctype->type = NULL;
 
 	return &ctype->std;
-}
-/* }}} */
-
-static ZEND_COLD zend_function *zend_ffi_ctype_get_constructor(zend_object *object) /* {{{ */
-{
-	zend_throw_error(zend_ffi_exception_ce, "Instantiation of 'CType' is not allowed");
-	return NULL;
 }
 /* }}} */
 
@@ -3912,6 +3898,99 @@ static int zend_ffi_post_startup(void) /* {{{ */
 }
 /* }}} */
 
+static ZEND_COLD zend_function *zend_fake_get_constructor(zend_object *object) /* {{{ */
+{
+	zend_throw_error(NULL, "Instantiation of '%s' is not allowed", ZSTR_VAL(object->ce->name));
+	return NULL;
+}
+/* }}} */
+
+static ZEND_COLD zend_never_inline void zend_bad_array_access(zend_class_entry *ce) /* {{{ */
+{
+	zend_throw_error(NULL, "Cannot use object of type %s as array", ZSTR_VAL(ce->name));
+}
+/* }}} */
+
+static ZEND_COLD zval *zend_fake_read_dimension(zval *object, zval *offset, int type, zval *rv) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+	return NULL;
+}
+/* }}} */
+
+static ZEND_COLD void zend_fake_write_dimension(zval *object, zval *offset, zval *value) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+}
+/* }}} */
+
+static ZEND_COLD int zend_fake_has_dimension(zval *object, zval *offset, int check_empty) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+	return 0;
+}
+/* }}} */
+
+static ZEND_COLD void zend_fake_unset_dimension(zval *object, zval *offset) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+}
+/* }}} */
+
+static ZEND_COLD zend_never_inline void zend_bad_property_access(zend_class_entry *ce) /* {{{ */
+{
+	zend_throw_error(NULL, "Cannot access property of object of type %s", ZSTR_VAL(ce->name));
+}
+/* }}} */
+
+static ZEND_COLD zval *zend_fake_read_property(zval *object, zval *member, int type, void **cache_slot, zval *rv) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_property_access(ce);
+	return NULL;
+}
+/* }}} */
+
+static ZEND_COLD void zend_fake_write_property(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+}
+/* }}} */
+
+static ZEND_COLD int zend_fake_has_property(zval *object, zval *member, int has_set_exists, void **cache_slot) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+	return 0;
+}
+/* }}} */
+
+static ZEND_COLD void zend_fake_unset_property(zval *object, zval *member, void **cache_slot) /* {{{ */
+{
+	zend_class_entry *ce = Z_OBJCE_P(object);
+    zend_bad_array_access(ce);
+}
+/* }}} */
+
+static zval *zend_fake_get_property_ptr_ptr(zval *object, zval *member, int type, void **cache_slot) /* {{{ */
+{
+	return NULL;
+}
+/* }}} */
+
+static ZEND_COLD zend_function *zend_fake_get_method(zend_object **obj_ptr, zend_string *method_name, const zval *key) /* {{{ */
+{
+	zend_class_entry *ce = (*obj_ptr)->ce;
+	zend_throw_error(NULL, "Object of type %s does not support method calls", ZSTR_VAL(ce->name));
+	return NULL;
+}
+/* }}} */
+
 /* {{{ ZEND_MINIT_FUNCTION
  */
 ZEND_MINIT_FUNCTION(ffi)
@@ -3946,13 +4025,13 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_handlers.clone_obj            = NULL;
 	zend_ffi_handlers.read_property        = zend_ffi_read_var;
 	zend_ffi_handlers.write_property       = zend_ffi_write_var;
-	zend_ffi_handlers.read_dimension       = NULL;
-	zend_ffi_handlers.write_dimension      = NULL;
-	zend_ffi_handlers.get_property_ptr_ptr = NULL;
-	zend_ffi_handlers.has_property         = NULL;
-	zend_ffi_handlers.unset_property       = NULL;
-	zend_ffi_handlers.has_dimension        = NULL;
-	zend_ffi_handlers.unset_dimension      = NULL;
+	zend_ffi_handlers.read_dimension       = zend_fake_read_dimension;
+	zend_ffi_handlers.write_dimension      = zend_fake_write_dimension;
+	zend_ffi_handlers.get_property_ptr_ptr = zend_fake_get_property_ptr_ptr;
+	zend_ffi_handlers.has_property         = zend_fake_has_property;
+	zend_ffi_handlers.unset_property       = zend_fake_unset_property;
+	zend_ffi_handlers.has_dimension        = zend_fake_has_dimension;
+	zend_ffi_handlers.unset_dimension      = zend_fake_unset_dimension;
 	zend_ffi_handlers.get_method           = zend_ffi_get_func;
 	zend_ffi_handlers.compare_objects      = NULL;
 	zend_ffi_handlers.cast_object          = NULL;
@@ -3968,19 +4047,19 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_ce->unserialize = zend_class_unserialize_deny;
 
 	memcpy(&zend_ffi_cdata_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-	zend_ffi_cdata_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
+	zend_ffi_cdata_handlers.get_constructor      = zend_fake_get_constructor;
 	zend_ffi_cdata_handlers.free_obj             = zend_ffi_cdata_free_obj;
 	zend_ffi_cdata_handlers.clone_obj            = zend_ffi_cdata_clone_obj;
 	zend_ffi_cdata_handlers.read_property        = zend_ffi_cdata_read_field;
 	zend_ffi_cdata_handlers.write_property       = zend_ffi_cdata_write_field;
 	zend_ffi_cdata_handlers.read_dimension       = zend_ffi_cdata_read_dim;
 	zend_ffi_cdata_handlers.write_dimension      = zend_ffi_cdata_write_dim;
-	zend_ffi_cdata_handlers.get_property_ptr_ptr = NULL;
-	zend_ffi_cdata_handlers.has_property         = NULL;
-	zend_ffi_cdata_handlers.unset_property       = NULL;
-	zend_ffi_cdata_handlers.has_dimension        = NULL;
-	zend_ffi_cdata_handlers.unset_dimension      = NULL;
-	zend_ffi_cdata_handlers.get_method           = NULL;
+	zend_ffi_cdata_handlers.get_property_ptr_ptr = zend_fake_get_property_ptr_ptr;
+	zend_ffi_cdata_handlers.has_property         = zend_fake_has_property;
+	zend_ffi_cdata_handlers.unset_property       = zend_fake_unset_property;
+	zend_ffi_cdata_handlers.has_dimension        = zend_fake_has_dimension;
+	zend_ffi_cdata_handlers.unset_dimension      = zend_fake_unset_dimension;
+	zend_ffi_cdata_handlers.get_method           = zend_fake_get_method;
 	zend_ffi_cdata_handlers.get_class_name       = zend_ffi_cdata_get_class_name;
 	zend_ffi_cdata_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_handlers.cast_object          = zend_ffi_cdata_cast_object;
@@ -3989,21 +4068,21 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.get_closure          = zend_ffi_cdata_get_closure;
 
 	memcpy(&zend_ffi_cdata_value_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-	zend_ffi_cdata_value_handlers.get_constructor      = zend_ffi_cdata_get_constructor;
+	zend_ffi_cdata_value_handlers.get_constructor      = zend_fake_get_constructor;
 	zend_ffi_cdata_value_handlers.free_obj             = zend_ffi_cdata_free_obj;
 	zend_ffi_cdata_value_handlers.clone_obj            = zend_ffi_cdata_clone_obj;
-	zend_ffi_cdata_value_handlers.read_property        = NULL;
-	zend_ffi_cdata_value_handlers.write_property       = NULL;
-	zend_ffi_cdata_value_handlers.read_dimension       = NULL;
-	zend_ffi_cdata_value_handlers.write_dimension      = NULL;
-	zend_ffi_cdata_value_handlers.get_property_ptr_ptr = NULL;
+	zend_ffi_cdata_value_handlers.read_property        = zend_fake_read_property;
+	zend_ffi_cdata_value_handlers.write_property       = zend_fake_write_property;
+	zend_ffi_cdata_value_handlers.read_dimension       = zend_fake_read_dimension;
+	zend_ffi_cdata_value_handlers.write_dimension      = zend_fake_write_dimension;
+	zend_ffi_cdata_value_handlers.get_property_ptr_ptr = zend_fake_get_property_ptr_ptr;
 	zend_ffi_cdata_value_handlers.get                  = zend_ffi_cdata_get;
 	zend_ffi_cdata_value_handlers.set                  = zend_ffi_cdata_set;
-	zend_ffi_cdata_value_handlers.has_property         = NULL;
-	zend_ffi_cdata_value_handlers.unset_property       = NULL;
-	zend_ffi_cdata_value_handlers.has_dimension        = NULL;
-	zend_ffi_cdata_value_handlers.unset_dimension      = NULL;
-	zend_ffi_cdata_value_handlers.get_method           = NULL;
+	zend_ffi_cdata_value_handlers.has_property         = zend_fake_has_property;
+	zend_ffi_cdata_value_handlers.unset_property       = zend_fake_unset_property;
+	zend_ffi_cdata_value_handlers.has_dimension        = zend_fake_has_dimension;
+	zend_ffi_cdata_value_handlers.unset_dimension      = zend_fake_unset_dimension;
+	zend_ffi_cdata_value_handlers.get_method           = zend_fake_get_method;
 	zend_ffi_cdata_value_handlers.get_class_name       = zend_ffi_cdata_get_class_name;
 	zend_ffi_cdata_value_handlers.compare_objects      = zend_ffi_cdata_compare_objects;
 	zend_ffi_cdata_value_handlers.cast_object          = NULL;
@@ -4019,19 +4098,19 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_ctype_ce->unserialize = zend_class_unserialize_deny;
 
 	memcpy(&zend_ffi_ctype_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-	zend_ffi_ctype_handlers.get_constructor      = zend_ffi_ctype_get_constructor;
+	zend_ffi_ctype_handlers.get_constructor      = zend_fake_get_constructor;
 	zend_ffi_ctype_handlers.free_obj             = zend_ffi_ctype_free_obj;
 	zend_ffi_ctype_handlers.clone_obj            = NULL;
-	zend_ffi_ctype_handlers.read_property        = NULL;
-	zend_ffi_ctype_handlers.write_property       = NULL;
-	zend_ffi_ctype_handlers.read_dimension       = NULL;
-	zend_ffi_ctype_handlers.write_dimension      = NULL;
-	zend_ffi_ctype_handlers.get_property_ptr_ptr = NULL;
-	zend_ffi_ctype_handlers.has_property         = NULL;
-	zend_ffi_ctype_handlers.unset_property       = NULL;
-	zend_ffi_ctype_handlers.has_dimension        = NULL;
-	zend_ffi_ctype_handlers.unset_dimension      = NULL;
-	zend_ffi_ctype_handlers.get_method           = NULL;
+	zend_ffi_ctype_handlers.read_property        = zend_fake_read_property;
+	zend_ffi_ctype_handlers.write_property       = zend_fake_write_property;
+	zend_ffi_ctype_handlers.read_dimension       = zend_fake_read_dimension;
+	zend_ffi_ctype_handlers.write_dimension      = zend_fake_write_dimension;
+	zend_ffi_ctype_handlers.get_property_ptr_ptr = zend_fake_get_property_ptr_ptr;
+	zend_ffi_ctype_handlers.has_property         = zend_fake_has_property;
+	zend_ffi_ctype_handlers.unset_property       = zend_fake_unset_property;
+	zend_ffi_ctype_handlers.has_dimension        = zend_fake_has_dimension;
+	zend_ffi_ctype_handlers.unset_dimension      = zend_fake_unset_dimension;
+	zend_ffi_ctype_handlers.get_method           = zend_fake_get_method;
 	zend_ffi_ctype_handlers.get_class_name       = zend_ffi_ctype_get_class_name;
 	zend_ffi_ctype_handlers.compare_objects      = zend_ffi_ctype_compare_objects;
 	zend_ffi_ctype_handlers.cast_object          = NULL;
