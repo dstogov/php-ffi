@@ -192,14 +192,23 @@ static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value);
 static char *zend_ffi_parse_directives(const char *filename, char *code_pos, char **scope_name, char **lib, zend_bool preload);
 static ZEND_FUNCTION(ffi_trampoline);
 
+static zend_always_inline void zend_ffi_object_init(zend_object *object, zend_class_entry *ce) /* {{{ */
+{
+	GC_SET_REFCOUNT(object, 1);
+	GC_TYPE_INFO(object) = IS_OBJECT | ((GC_COLLECTABLE | IS_OBJ_DESTRUCTOR_CALLED) << GC_FLAGS_SHIFT);
+	object->ce = ce;
+	object->properties = NULL;
+	zend_objects_store_put(object);
+}
+/* }}} */
+
 static zend_object *zend_ffi_cdata_new(zend_class_entry *class_type) /* {{{ */
 {
 	zend_ffi_cdata *cdata;
 
 	cdata = emalloc(sizeof(zend_ffi_cdata));
-	memset(cdata, 0, sizeof(zend_ffi_cdata));
 
-	zend_object_std_init(&cdata->std, class_type);
+	zend_ffi_object_init(&cdata->std, class_type);
 	cdata->std.handlers = &zend_ffi_cdata_handlers;
 
 	cdata->type = NULL;
@@ -1512,9 +1521,8 @@ static zend_object *zend_ffi_ctype_new(zend_class_entry *class_type) /* {{{ */
 	zend_ffi_ctype *ctype;
 
 	ctype = emalloc(sizeof(zend_ffi_ctype));
-	memset(ctype, 0, sizeof(zend_ffi_ctype));
 
-	zend_object_std_init(&ctype->std, class_type);
+	zend_ffi_object_init(&ctype->std, class_type);
 	ctype->std.handlers = &zend_ffi_ctype_handlers;
 
 	ctype->type = NULL;
@@ -1527,7 +1535,6 @@ static void zend_ffi_ctype_free_obj(zend_object *object) /* {{{ */
 {
 	zend_ffi_ctype *ctype = (zend_ffi_ctype*)object;
 
-	zend_object_std_dtor(&ctype->std);
 	zend_ffi_type_dtor(ctype->type);
 }
 /* }}} */
@@ -1601,12 +1608,14 @@ static zend_object *zend_ffi_new(zend_class_entry *class_type) /* {{{ */
 	zend_ffi *ffi;
 
 	ffi = emalloc(sizeof(zend_ffi));
-	memset(ffi, 0, sizeof(zend_ffi));
 
-	zend_object_std_init(&ffi->std, class_type);
+	zend_ffi_object_init(&ffi->std, class_type);
 	ffi->std.handlers = &zend_ffi_handlers;
 
 	ffi->lib = NULL;
+	ffi->symbols = NULL;
+	ffi->tags = NULL;
+	ffi->persistent = 0;
 
 	return &ffi->std;
 }
@@ -1726,8 +1735,6 @@ static void zend_ffi_free_obj(zend_object *object) /* {{{ */
 {
 	zend_ffi *ffi = (zend_ffi*)object;
 
-	zend_object_std_dtor(&ffi->std);
-
 	if (ffi->persistent) {
 		return;
 	}
@@ -1753,7 +1760,6 @@ static void zend_ffi_cdata_free_obj(zend_object *object) /* {{{ */
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)object;
 
-	zend_object_std_dtor(&cdata->std);
 	zend_ffi_cdata_dtor(cdata);
 }
 /* }}} */
@@ -3991,6 +3997,20 @@ static ZEND_COLD zend_function *zend_fake_get_method(zend_object **obj_ptr, zend
 }
 /* }}} */
 
+static HashTable *zend_fake_get_properties(zval *object) /* {{{ */
+{
+	return (HashTable*)&zend_empty_array;
+}
+/* }}} */
+
+static HashTable *zend_fake_get_gc(zval *object, zval **table, int *n) /* {{{ */
+{
+	*table = NULL;
+	*n = 0;
+	return NULL;
+}
+/* }}} */
+
 /* {{{ ZEND_MINIT_FUNCTION
  */
 ZEND_MINIT_FUNCTION(ffi)
@@ -4037,6 +4057,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_handlers.cast_object          = NULL;
 	zend_ffi_handlers.get_debug_info       = NULL;
 	zend_ffi_handlers.get_closure          = NULL;
+	zend_ffi_handlers.get_properties       = zend_fake_get_properties;
+	zend_ffi_handlers.get_gc               = zend_fake_get_gc;
 
 	INIT_NS_CLASS_ENTRY(ce, "FFI", "CData", NULL);
 	zend_ffi_cdata_ce = zend_register_internal_class(&ce);
@@ -4066,6 +4088,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_handlers.count_elements       = zend_ffi_cdata_count_elements;
 	zend_ffi_cdata_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_handlers.get_closure          = zend_ffi_cdata_get_closure;
+	zend_ffi_cdata_handlers.get_properties       = zend_fake_get_properties;
+	zend_ffi_cdata_handlers.get_gc               = zend_fake_get_gc;
 
 	memcpy(&zend_ffi_cdata_value_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	zend_ffi_cdata_value_handlers.get_constructor      = zend_fake_get_constructor;
@@ -4089,6 +4113,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_cdata_value_handlers.count_elements       = NULL;
 	zend_ffi_cdata_value_handlers.get_debug_info       = zend_ffi_cdata_get_debug_info;
 	zend_ffi_cdata_value_handlers.get_closure          = NULL;
+	zend_ffi_cdata_value_handlers.get_properties       = zend_fake_get_properties;
+	zend_ffi_cdata_value_handlers.get_gc               = zend_fake_get_gc;
 
 	INIT_NS_CLASS_ENTRY(ce, "FFI", "CType", NULL);
 	zend_ffi_ctype_ce = zend_register_internal_class(&ce);
@@ -4117,6 +4143,8 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_ctype_handlers.count_elements       = NULL;
 	zend_ffi_ctype_handlers.get_debug_info       = zend_ffi_ctype_get_debug_info;
 	zend_ffi_ctype_handlers.get_closure          = NULL;
+	zend_ffi_ctype_handlers.get_properties       = zend_fake_get_properties;
+	zend_ffi_ctype_handlers.get_gc               = zend_fake_get_gc;
 
 	if (FFI_G(preload)) {
 		orig_post_startup_cb = zend_post_startup_cb;
