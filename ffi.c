@@ -186,11 +186,19 @@ static zend_internal_function zend_ffi_cast_fn;
 static zend_internal_function zend_ffi_type_fn;
 
 /* forward declarations */
-static void zend_ffi_type_dtor(zend_ffi_type *type);
+static void _zend_ffi_type_dtor(zend_ffi_type *type);
 static void zend_ffi_finalize_type(zend_ffi_dcl *dcl);
 static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value);
 static char *zend_ffi_parse_directives(const char *filename, char *code_pos, char **scope_name, char **lib, zend_bool preload);
 static ZEND_FUNCTION(ffi_trampoline);
+
+static zend_always_inline void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
+{
+	if (UNEXPECTED(ZEND_FFI_TYPE_IS_OWNED(type))) {
+		_zend_ffi_type_dtor(type);
+		return;
+	}
+}
 
 static zend_always_inline void zend_ffi_object_init(zend_object *object, zend_class_entry *ce) /* {{{ */
 {
@@ -1621,11 +1629,8 @@ static zend_object *zend_ffi_new(zend_class_entry *class_type) /* {{{ */
 }
 /* }}} */
 
-static void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
+static void _zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
 {
-	if (!ZEND_FFI_TYPE_IS_OWNED(type)) {
-		return;
-	}
 	type = ZEND_FFI_TYPE(type);
 
 	switch (type->kind) {
