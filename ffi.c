@@ -449,11 +449,14 @@ again:
 	}
 
 	if (!cdata) {
-		cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-		if (type->kind < ZEND_FFI_TYPE_POINTER) {
-			cdata->std.handlers = &zend_ffi_cdata_value_handlers;
-		}
+		cdata = emalloc(sizeof(zend_ffi_cdata));
+		zend_ffi_object_init(&cdata->std, zend_ffi_cdata_ce);
+		cdata->std.handlers =
+			(type->kind < ZEND_FFI_TYPE_POINTER) ?
+			&zend_ffi_cdata_value_handlers :
+			&zend_ffi_cdata_handlers;
 		cdata->type = type;
+		cdata->flags = is_const ? ZEND_FFI_FLAG_CONST : 0;
 		if ((is_ret || read_type == BP_VAR_R) && type->kind == ZEND_FFI_TYPE_POINTER) {
 			cdata->ptr = (void*)&cdata->ptr_holder;
 			*(void**)cdata->ptr = *(void**)ptr;
@@ -463,9 +466,6 @@ again:
 			memcpy(cdata->ptr, ptr, type->size);
 		} else {
 			cdata->ptr = ptr;
-		}
-		if (is_const) {
-			cdata->flags |= ZEND_FFI_FLAG_CONST;
 		}
 	} else {
 		GC_ADDREF(&cdata->std);
