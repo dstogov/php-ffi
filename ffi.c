@@ -864,14 +864,14 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 		zend_string *tmp_field_name;
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
-		if (type->kind != ZEND_FFI_TYPE_STRUCT) {
+		if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to read field '%s' of non C struct/union", ZSTR_VAL(field_name));
 			zend_tmp_string_release(tmp_field_name);
 			return &EG(uninitialized_zval);
 		}
 
 		field = zend_hash_find_ptr(&type->record.fields, field_name);
-		if (!field) {
+		if (UNEXPECTED(!field)) {
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to read undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
 			zend_tmp_string_release(tmp_field_name);
 			return &EG(uninitialized_zval);
@@ -885,12 +885,12 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 		}
 	}
 
-	if (!cdata->ptr) {
+	if (UNEXPECTED(!cdata->ptr)) {
 		zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 		return &EG(uninitialized_zval);
 	}
 
-	if (!field->bits) {
+	if (EXPECTED(!field->bits)) {
 		ptr = (void*)(((char*)cdata->ptr) + field->offset);
 		if (zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv, (cdata->flags & ZEND_FFI_FLAG_CONST) || field->is_const, 0) != SUCCESS) {
 			return &EG(uninitialized_zval);
@@ -916,14 +916,14 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		zend_string *tmp_field_name;
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
-		if (type->kind != ZEND_FFI_TYPE_STRUCT) {
+		if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
 			zend_tmp_string_release(tmp_field_name);
 			return;
 		}
 
 		field = zend_hash_find_ptr(&type->record.fields, field_name);
-		if (!field) {
+		if (UNEXPECTED(!field)) {
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
 			zend_tmp_string_release(tmp_field_name);
 			return;
@@ -937,15 +937,15 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		}
 	}
 
-	if (!cdata->ptr) {
+	if (UNEXPECTED(!cdata->ptr)) {
 		zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 		return;
 	}
 
-	if (cdata->flags & ZEND_FFI_FLAG_CONST) {
+	if (UNEXPECTED(cdata->flags & ZEND_FFI_FLAG_CONST)) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only location");
 		return;
-	} else if (field->is_const) {
+	} else if (UNEXPECTED(field->is_const)) {
 		zend_string *tmp_field_name;
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only field '%s'", ZSTR_VAL(field_name));
@@ -953,7 +953,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		return;
 	}
 
-	if (!field->bits) {
+	if (EXPECTED(!field->bits)) {
 		ptr = (void*)(((char*)cdata->ptr) + field->offset);
 		zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
 	} else {
@@ -970,23 +970,23 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 	void           *ptr;
 	zend_bool       is_const;
 
-	if (type->kind == ZEND_FFI_TYPE_ARRAY) {
-		if (dim < 0 || (type->array.length && dim >= type->array.length)) {
+	if (EXPECTED(type->kind == ZEND_FFI_TYPE_ARRAY)) {
+		if (UNEXPECTED(dim < 0) || (UNEXPECTED(type->array.length) && UNEXPECTED(dim >= type->array.length))) {
 			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
 			return &EG(uninitialized_zval);
 		}
 
 		is_const = (cdata->flags & ZEND_FFI_FLAG_CONST) || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->array.type);
-		if (!cdata->ptr) {
+		if (UNEXPECTED(!cdata->ptr)) {
 			zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 			return &EG(uninitialized_zval);
 		}
 		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
-	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
+	} else if (EXPECTED(type->kind == ZEND_FFI_TYPE_POINTER)) {
 		is_const = (cdata->flags & ZEND_FFI_FLAG_CONST) || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->pointer.type);
-		if (!cdata->ptr) {
+		if (UNEXPECTED(!cdata->ptr)) {
 			zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 			return &EG(uninitialized_zval);
 		}
@@ -1012,23 +1012,25 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 	void           *ptr;
 	zend_bool       is_const;
 
-	if (type->kind == ZEND_FFI_TYPE_ARRAY) {
-		if (dim < 0 || (type->array.length && dim >= type->array.length)) {
+	if (EXPECTED(type->kind == ZEND_FFI_TYPE_ARRAY)) {
+		if (UNEXPECTED(dim < 0)
+		 || (UNEXPECTED(type->array.length)
+		  && UNEXPECTED(dim >= type->array.length))) {
 			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
 			return;
 		}
 
 		is_const = (cdata->flags & ZEND_FFI_FLAG_CONST) || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->array.type);
-		if (!cdata->ptr) {
+		if (UNEXPECTED(!cdata->ptr)) {
 			zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 			return;
 		}
 		ptr = (void*)(((char*)cdata->ptr) + type->size * dim);
-	} else if (type->kind == ZEND_FFI_TYPE_POINTER) {
+	} else if (EXPECTED(type->kind == ZEND_FFI_TYPE_POINTER)) {
 		is_const = (cdata->flags & ZEND_FFI_FLAG_CONST) || (type->attr & ZEND_FFI_ATTR_CONST);
 		type = ZEND_FFI_TYPE(type->pointer.type);
-		if (!cdata->ptr) {
+		if (UNEXPECTED(!cdata->ptr)) {
 			zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 			return;
 		}
@@ -1038,7 +1040,7 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 		return;
 	}
 
-	if (is_const) {
+	if (UNEXPECTED(is_const)) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only location");
 		return;
 	}
