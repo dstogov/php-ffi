@@ -23,4 +23,4 @@ object(FFI\CData:uint16_t[2])#%d (2) {
 }
 object(FFI\CData:uint16_t[2])#%d (0) {
 }
-FFI\Exception: NULL pointer dereference
+FFI\Exception: Use after free()
