@@ -971,7 +971,8 @@ static zval *zend_ffi_cdata_read_dim(zval *object, zval *offset, int read_type, 
 	zend_ffi_flags  is_const;
 
 	if (EXPECTED(type->kind == ZEND_FFI_TYPE_ARRAY)) {
-		if (UNEXPECTED(dim < 0) || (UNEXPECTED(type->array.length) && UNEXPECTED(dim >= type->array.length))) {
+		if (UNEXPECTED((zend_ulong)(dim) >= (zend_ulong)type->array.length)
+		 && (UNEXPECTED(dim < 0) || UNEXPECTED(type->array.length != 0))) {
 			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
 			return &EG(uninitialized_zval);
 		}
@@ -1010,9 +1011,8 @@ static void zend_ffi_cdata_write_dim(zval *object, zval *offset, zval *value) /*
 	zend_ffi_flags  is_const;
 
 	if (EXPECTED(type->kind == ZEND_FFI_TYPE_ARRAY)) {
-		if (UNEXPECTED(dim < 0)
-		 || (UNEXPECTED(type->array.length)
-		  && UNEXPECTED(dim >= type->array.length))) {
+		if (UNEXPECTED((zend_ulong)(dim) >= (zend_ulong)type->array.length)
+		 && (UNEXPECTED(dim < 0) || UNEXPECTED(type->array.length != 0))) {
 			zend_throw_error(zend_ffi_exception_ce, "C array index out of bounds");
 			return;
 		}
