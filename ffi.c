@@ -2661,7 +2661,7 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	}
 
 	if (type_def) {
-		zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
+		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
 
 		if (Z_TYPE(EX(This)) == IS_OBJECT) {
 			zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
@@ -2813,7 +2813,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (type_def) {
-		zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
+		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
 
 		if (Z_TYPE(EX(This)) == IS_OBJECT) {
 			zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
@@ -2925,7 +2925,7 @@ ZEND_METHOD(FFI, type) /* {{{ */
 	if (Z_TYPE_P(zv) == IS_STRING) {
 		zend_string *type_def = Z_STR_P(zv);
 
-		zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};
+		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
 
 		if (Z_TYPE(EX(This)) == IS_OBJECT) {
 			zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));

@@ -75,7 +75,7 @@ static void yy_error_sym(const char *msg, int sym) {
 
 declarations:
 	(
-		{zend_ffi_dcl common_dcl = {0, 0, 0, 0, NULL};}
+		{zend_ffi_dcl common_dcl = ZEND_FFI_ATTR_INIT;}
 		declaration_specifiers(&common_dcl)
 		(
 			{const char *name;}
@@ -131,7 +131,7 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 		|	"_Alignas"
 			"("
 			(	&type_name
-				{zend_ffi_dcl align_dcl = {0, 0, 0, 0, NULL};}
+				{zend_ffi_dcl align_dcl = ZEND_FFI_ATTR_INIT;}
 				type_name(&align_dcl)
 				{zend_ffi_align_as_type(dcl, &align_dcl);}
 			|	{zend_ffi_val align_val;}
@@ -263,7 +263,7 @@ struct_contents(zend_ffi_dcl *dcl):
 
 
 struct_declaration(zend_ffi_dcl *struct_dcl):
-	{zend_ffi_dcl common_field_dcl = {0, 0, 0, 0, NULL};}
+	{zend_ffi_dcl common_field_dcl = ZEND_FFI_ATTR_INIT;}
 	specifier_qualifier_list(&common_field_dcl)
 	(	/* empty */
 		{zend_ffi_add_anonymous_field(struct_dcl, &common_field_dcl);}
@@ -402,7 +402,7 @@ pointer(zend_ffi_dcl *dcl):
 ;
 
 array_or_function_declarators(zend_ffi_dcl *dcl):
-	{zend_ffi_dcl dummy = {0, 0, 0, 0, NULL};}
+	{zend_ffi_dcl dummy = ZEND_FFI_ATTR_INIT;}
 	{zend_ffi_val len = {.kind = ZEND_FFI_VAL_EMPTY};}
 	{HashTable *args = NULL;}
 	{uint32_t attr = 0;}
@@ -456,7 +456,7 @@ parameter_declaration(HashTable **args):
 	{size_t name_len = 0;}
 	{zend_bool old_allow_vla = FFI_G(allow_vla);}
 	{FFI_G(allow_vla) = 1;}
-	{zend_ffi_dcl param_dcl = {0, 0, 0, 0, NULL};}
+	{zend_ffi_dcl param_dcl = ZEND_FFI_ATTR_INIT;}
 	specifier_qualifier_list(&param_dcl)
 	abstract_declarator(&param_dcl, &name, &name_len)
 	/*attributes(&param_dcl)? conflict ???*/
@@ -677,7 +677,7 @@ multiplicative_expression(zend_ffi_val *val):
 
 cast_expression(zend_ffi_val *val):
 	{int do_cast = 0;}
-	{zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};}
+	{zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;}
 	(	&( "(" type_name ")" )
 		"("
 		type_name(&dcl)
@@ -691,7 +691,7 @@ cast_expression(zend_ffi_val *val):
 unary_expression(zend_ffi_val *val):
 	{const char *name;}
 	{size_t name_len;}
-	{zend_ffi_dcl dcl = {0, 0, 0, 0, NULL};}
+	{zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;}
 	(	ID(&name, &name_len)
 		{zend_ffi_resolve_const(name, name_len, val);}
 		(

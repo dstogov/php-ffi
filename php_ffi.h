@@ -152,6 +152,8 @@ typedef struct _zend_ffi_dcl {
 	zend_ffi_type *type;
 } zend_ffi_dcl;
 
+#define ZEND_FFI_ATTR_INIT {0, 0, 0, 0, NULL}
+
 typedef enum _zend_ffi_val_kind {
 	ZEND_FFI_VAL_EMPTY,
 	ZEND_FFI_VAL_ERROR,
