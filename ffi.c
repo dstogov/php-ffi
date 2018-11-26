@@ -189,9 +189,12 @@ static zend_internal_function zend_ffi_type_fn;
 /* forward declarations */
 static void _zend_ffi_type_dtor(zend_ffi_type *type);
 static void zend_ffi_finalize_type(zend_ffi_dcl *dcl);
-static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value);
 static char *zend_ffi_parse_directives(const char *filename, char *code_pos, char **scope_name, char **lib, zend_bool preload);
 static ZEND_FUNCTION(ffi_trampoline);
+
+#if FFI_CLOSURES
+static void *zend_ffi_create_callback(zend_ffi_type *type, zval *value);
+#endif
 
 static zend_always_inline void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
 {
@@ -538,6 +541,129 @@ static int zend_ffi_zval_to_bit_field(void *ptr, zend_ffi_field *field, zval *va
 }
 /* }}} */
 
+static zend_always_inline int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /* {{{ */
+{
+	zend_long lval;
+	double dval;
+	zend_string *tmp_str;
+	zend_string *str;
+	zend_ffi_type_kind kind = type->kind;
+
+again:
+    switch (kind) {
+		case ZEND_FFI_TYPE_FLOAT:
+			dval = zval_get_double(value);
+			*(float*)ptr = dval;
+			break;
+		case ZEND_FFI_TYPE_DOUBLE:
+			dval = zval_get_double(value);
+			*(double*)ptr = dval;
+			break;
+#ifdef HAVE_LONG_DOUBLE
+		case ZEND_FFI_TYPE_LONGDOUBLE:
+			dval = zval_get_double(value);
+			*(long double*)ptr = dval;
+			break;
+#endif
+		case ZEND_FFI_TYPE_UINT8:
+			lval = zval_get_long(value);
+			*(uint8_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_SINT8:
+			lval = zval_get_long(value);
+			*(int8_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_UINT16:
+			lval = zval_get_long(value);
+			*(uint16_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_SINT16:
+			lval = zval_get_long(value);
+			*(int16_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_UINT32:
+			lval = zval_get_long(value);
+			*(uint32_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_SINT32:
+			lval = zval_get_long(value);
+			*(int32_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_UINT64:
+			lval = zval_get_long(value);
+			*(uint64_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_SINT64:
+			lval = zval_get_long(value);
+			*(int64_t*)ptr = lval;
+			break;
+		case ZEND_FFI_TYPE_BOOL:
+			*(uint8_t*)ptr = zend_is_true(value);
+			break;
+		case ZEND_FFI_TYPE_CHAR:
+			str = zval_get_tmp_string(value, &tmp_str);
+			if (ZSTR_LEN(str) == 1) {
+				*(char*)ptr = ZSTR_VAL(str)[0];
+			} else {
+				zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
+				return FAILURE;
+			}
+			zend_tmp_string_release(tmp_str);
+			break;
+		case ZEND_FFI_TYPE_ENUM:
+			kind = type->enumeration.kind;
+			goto again;
+		case ZEND_FFI_TYPE_POINTER:
+			if (Z_TYPE_P(value) == IS_NULL) {
+				*(void**)ptr = NULL;
+				break;
+			} else if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
+
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
+					if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
+						*(void**)ptr = *(void**)cdata->ptr;
+					} else {
+						if (cdata->flags & ZEND_FFI_FLAG_OWNED) {
+							zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
+							return FAILURE;
+						}
+						*(void**)ptr = cdata->ptr;
+					}
+					return SUCCESS;
+				}
+#if FFI_CLOSURES
+			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_FUNC) {
+				void *callback = zend_ffi_create_callback(ZEND_FFI_TYPE(type->pointer.type), value);
+
+				if (callback) {
+					*(void**)ptr = callback;
+					break;
+				} else {
+					return FAILURE;
+				}
+#endif
+			}
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
+			return FAILURE;
+		case ZEND_FFI_TYPE_STRUCT:
+		case ZEND_FFI_TYPE_ARRAY:
+		default:
+			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
+				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type)) &&
+				    type->size == ZEND_FFI_TYPE(cdata->type)->size) {
+					memcpy(ptr, cdata->ptr, type->size);
+					return SUCCESS;
+				}
+			}
+			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
+			return FAILURE;
+	}
+	return SUCCESS;
+}
+/* }}} */
+
 #if FFI_CLOSURES
 typedef struct _zend_ffi_callback_data {
 	zend_fcall_info_cache  fcc;
@@ -695,129 +821,6 @@ static void *zend_ffi_create_callback(zend_ffi_type *type, zval *value) /* {{{ *
 }
 /* }}} */
 #endif
-
-static int zend_ffi_zval_to_cdata(void *ptr, zend_ffi_type *type, zval *value) /* {{{ */
-{
-	zend_long lval;
-	double dval;
-	zend_string *tmp_str;
-	zend_string *str;
-	zend_ffi_type_kind kind = type->kind;
-
-again:
-    switch (kind) {
-		case ZEND_FFI_TYPE_FLOAT:
-			dval = zval_get_double(value);
-			*(float*)ptr = dval;
-			break;
-		case ZEND_FFI_TYPE_DOUBLE:
-			dval = zval_get_double(value);
-			*(double*)ptr = dval;
-			break;
-#ifdef HAVE_LONG_DOUBLE
-		case ZEND_FFI_TYPE_LONGDOUBLE:
-			dval = zval_get_double(value);
-			*(long double*)ptr = dval;
-			break;
-#endif
-		case ZEND_FFI_TYPE_UINT8:
-			lval = zval_get_long(value);
-			*(uint8_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_SINT8:
-			lval = zval_get_long(value);
-			*(int8_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_UINT16:
-			lval = zval_get_long(value);
-			*(uint16_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_SINT16:
-			lval = zval_get_long(value);
-			*(int16_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_UINT32:
-			lval = zval_get_long(value);
-			*(uint32_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_SINT32:
-			lval = zval_get_long(value);
-			*(int32_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_UINT64:
-			lval = zval_get_long(value);
-			*(uint64_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_SINT64:
-			lval = zval_get_long(value);
-			*(int64_t*)ptr = lval;
-			break;
-		case ZEND_FFI_TYPE_BOOL:
-			*(uint8_t*)ptr = zend_is_true(value);
-			break;
-		case ZEND_FFI_TYPE_CHAR:
-			str = zval_get_tmp_string(value, &tmp_str);
-			if (ZSTR_LEN(str) == 1) {
-				*(char*)ptr = ZSTR_VAL(str)[0];
-			} else {
-				zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
-				return FAILURE;
-			}
-			zend_tmp_string_release(tmp_str);
-			break;
-		case ZEND_FFI_TYPE_ENUM:
-			kind = type->enumeration.kind;
-			goto again;
-		case ZEND_FFI_TYPE_POINTER:
-			if (Z_TYPE_P(value) == IS_NULL) {
-				*(void**)ptr = NULL;
-				break;
-			} else if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
-				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
-
-				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type))) {
-					if (ZEND_FFI_TYPE(cdata->type)->kind == ZEND_FFI_TYPE_POINTER) {
-						*(void**)ptr = *(void**)cdata->ptr;
-					} else {
-						if (cdata->flags & ZEND_FFI_FLAG_OWNED) {
-							zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of owned C pointer");
-							return FAILURE;
-						}
-						*(void**)ptr = cdata->ptr;
-					}
-					return SUCCESS;
-				}
-#if FFI_CLOSURES
-			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_FUNC) {
-				void *callback = zend_ffi_create_callback(ZEND_FFI_TYPE(type->pointer.type), value);
-
-				if (callback) {
-					*(void**)ptr = callback;
-					break;
-				} else {
-					return FAILURE;
-				}
-#endif
-			}
-			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
-			return FAILURE;
-		case ZEND_FFI_TYPE_STRUCT:
-		case ZEND_FFI_TYPE_ARRAY:
-		default:
-			if (Z_TYPE_P(value) == IS_OBJECT && Z_OBJCE_P(value) == zend_ffi_cdata_ce) {
-				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(value);
-				if (zend_ffi_is_compatible_type(type, ZEND_FFI_TYPE(cdata->type)) &&
-				    type->size == ZEND_FFI_TYPE(cdata->type)->size) {
-					memcpy(ptr, cdata->ptr, type->size);
-					return SUCCESS;
-				}
-			}
-			zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign of incompatible C type");
-			return FAILURE;
-	}
-	return SUCCESS;
-}
-/* }}} */
 
 static zval* zend_ffi_cdata_get(zval *object, zval *rv) /* {{{ */
 {
