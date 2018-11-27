@@ -3886,7 +3886,7 @@ static ZEND_COLD zval *zend_fake_read_property(zval *object, zval *member, int t
 {
 	zend_class_entry *ce = Z_OBJCE_P(object);
     zend_bad_property_access(ce);
-	return NULL;
+	return &EG(uninitialized_zval);
 }
 /* }}} */
 
@@ -3982,7 +3982,7 @@ static ZEND_COLD void zend_ffi_free_unset_dimension(zval *object, zval *offset) 
 static ZEND_COLD zval *zend_ffi_free_read_property(zval *object, zval *member, int type, void **cache_slot, zval *rv) /* {{{ */
 {
 	zend_ffi_use_after_free();
-	return NULL;
+	return &EG(uninitialized_zval);
 }
 /* }}} */
 
