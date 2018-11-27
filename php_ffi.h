@@ -26,7 +26,6 @@ ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	HashTable types;
 
 	/* preloading */
-	char *preload;               /* list of files and directories to preload */
 	HashTable *scopes;           /* list of preloaded scopes */
 
 	/* callbacks */

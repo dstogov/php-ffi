@@ -228,7 +228,7 @@ FFI definition parsing and shared library loading may take significant time. It'
 int printf(const char *format, ...);
 ```
 
-These files are loaded through php.ini directive. It may be repeated few times.
+These files are loaded through the same **FFI::load()** load function, executed from file loaded by **opcache.preload** php.ini directive.
 
 ``` ini
 ffi.preload=/etc/php/ffi/printf.h
@@ -277,7 +277,7 @@ FFI functionality may be included into PHP-8 core, to provide better interpretat
 
 ### Requirement
 
-- php-master (7.3)
+- php-master (7.4)
 - [libffi-3.*](http://sourceware.org/libffi/)
 
 ### Install
