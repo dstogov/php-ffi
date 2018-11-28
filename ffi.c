@@ -916,7 +916,7 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr;
+	void           *ptr = cdata->ptr;
 	zend_ffi_field *field;
 
 	if (cache_slot && *cache_slot == type) {
@@ -926,9 +926,26 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
 		if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
-			zend_throw_error(zend_ffi_exception_ce, "Attempt to read field '%s' of non C struct/union", ZSTR_VAL(field_name));
-			zend_tmp_string_release(tmp_field_name);
-			return &EG(uninitialized_zval);
+			if (type->kind == ZEND_FFI_TYPE_POINTER) {
+				/* transparently dereference the pointer */
+				if (UNEXPECTED(!ptr)) {
+					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
+					zend_tmp_string_release(tmp_field_name);
+					return &EG(uninitialized_zval);
+				}
+				ptr = (void*)(*(char**)ptr);
+				if (UNEXPECTED(!ptr)) {
+					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
+					zend_tmp_string_release(tmp_field_name);
+					return &EG(uninitialized_zval);
+				}
+				type = ZEND_FFI_TYPE(type->pointer.type);
+			}
+			if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
+				zend_throw_error(zend_ffi_exception_ce, "Attempt to read field '%s' of non C struct/union", ZSTR_VAL(field_name));
+				zend_tmp_string_release(tmp_field_name);
+				return &EG(uninitialized_zval);
+			}
 		}
 
 		field = zend_hash_find_ptr(&type->record.fields, field_name);
@@ -947,17 +964,17 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 	}
 
 #if 0
-	if (UNEXPECTED(!cdata->ptr)) {
+	if (UNEXPECTED(!ptr)) {
 		zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 		return &EG(uninitialized_zval);
 	}
 #endif
 
 	if (EXPECTED(!field->bits)) {
-		ptr = (void*)(((char*)cdata->ptr) + field->offset);
+		ptr = (void*)(((char*)ptr) + field->offset);
 		zend_ffi_cdata_to_zval(NULL, ptr, ZEND_FFI_TYPE(field->type), read_type, rv, (cdata->flags & ZEND_FFI_FLAG_CONST) | (zend_ffi_flags)field->is_const, 0);
 	} else {
-		zend_ffi_bit_field_to_zval(cdata->ptr, field, rv);
+		zend_ffi_bit_field_to_zval(ptr, field, rv);
 	}
 
 	return rv;
@@ -968,7 +985,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
-	void           *ptr;
+	void           *ptr = cdata->ptr;
 	zend_ffi_field *field;
 
 	if (cache_slot && *cache_slot == type) {
@@ -978,9 +995,26 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 
 		if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
-			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
-			zend_tmp_string_release(tmp_field_name);
-			return;
+			if (type->kind == ZEND_FFI_TYPE_POINTER) {
+				/* transparently dereference the pointer */
+				if (UNEXPECTED(!ptr)) {
+					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
+					zend_tmp_string_release(tmp_field_name);
+					return;
+				}
+				ptr = (void*)(*(char**)ptr);
+				if (UNEXPECTED(!ptr)) {
+					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
+					zend_tmp_string_release(tmp_field_name);
+					return;
+				}
+				type = ZEND_FFI_TYPE(type->pointer.type);
+			}
+			if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
+				zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
+				zend_tmp_string_release(tmp_field_name);
+				return;
+			}
 		}
 
 		field = zend_hash_find_ptr(&type->record.fields, field_name);
@@ -999,7 +1033,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 	}
 
 #if 0
-	if (UNEXPECTED(!cdata->ptr)) {
+	if (UNEXPECTED(!ptr)) {
 		zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 		return;
 	}
@@ -1017,10 +1051,10 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 	}
 
 	if (EXPECTED(!field->bits)) {
-		ptr = (void*)(((char*)cdata->ptr) + field->offset);
+		ptr = (void*)(((char*)ptr) + field->offset);
 		zend_ffi_zval_to_cdata(ptr, ZEND_FFI_TYPE(field->type), value);
 	} else {
-		zend_ffi_zval_to_bit_field(cdata->ptr, field, value);
+		zend_ffi_zval_to_bit_field(ptr, field, value);
 	}
 }
 /* }}} */
@@ -3128,6 +3162,8 @@ ZEND_METHOD(FFI, free) /* {{{ */
 		}
 		if (cdata->ptr != (void*)&cdata->ptr_holder) {
 			pefree(*(void**)cdata->ptr, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
+		} else {
+			pefree(cdata->ptr_holder, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
 		}
 		*(void**)cdata->ptr = NULL;
 	} else if (!(cdata->flags & ZEND_FFI_FLAG_OWNED)) {
