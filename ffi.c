@@ -2997,19 +2997,25 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	zend_ffi_type *type, *type_ptr;
 	zend_ffi_cdata *cdata;
 	void *ptr;
+	zend_bool owned = 1;
 	zend_bool persistent = 0;
 	zend_bool is_const = 0;
 	zend_ffi_flags flags = ZEND_FFI_FLAG_OWNED;
 
-	ZEND_PARSE_PARAMETERS_START(1, 2)
+	ZEND_PARSE_PARAMETERS_START(1, 3)
 		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
 			Z_PARAM_STR(type_def)
 		} else {
 			Z_PARAM_OBJECT_OF_CLASS(ztype, zend_ffi_ctype_ce)
 		}
 		Z_PARAM_OPTIONAL
+		Z_PARAM_BOOL(owned)
 		Z_PARAM_BOOL(persistent)
 	ZEND_PARSE_PARAMETERS_END();
+
+	if (!owned) {
+		flags &= ~ZEND_FFI_FLAG_OWNED;
+	}
 
 	if (persistent) {
 		flags |= ZEND_FFI_FLAG_PERSISTENT;
@@ -3092,28 +3098,6 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	}
 
 	RETURN_OBJ(&cdata->std);
-}
-/* }}} */
-
-ZEND_METHOD(FFI, own) /* {{{ */
-{
-	zval *zv;
-	zend_ffi_cdata *cdata;
-	zend_bool own = 1;
-
-	ZEND_PARSE_PARAMETERS_START(1, 2)
-		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
-		Z_PARAM_OPTIONAL
-		Z_PARAM_BOOL(own);
-	ZEND_PARSE_PARAMETERS_END();
-
-	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
-	if (own) {
-		cdata->flags |= ZEND_FFI_FLAG_OWNED;
-	} else {
-		cdata->flags &= ~ZEND_FFI_FLAG_OWNED;
-	}
-	ZVAL_COPY(return_value, zv);
 }
 /* }}} */
 
@@ -3724,11 +3708,6 @@ ZEND_METHOD(FFI, string) /* {{{ */
 }
 /* }}} */
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_func_own, 0, 0, 1)
-	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
-	ZEND_ARG_INFO(0, own)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_free, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
@@ -3738,7 +3717,6 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, load,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, scope,       NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, new,         NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, own,         arginfo_func_own,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free,        arginfo_func_free, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, type,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)

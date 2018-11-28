@@ -1,10 +1,10 @@
 --TEST--
-FFI 035: FFI::own()
+FFI 035: FFI::new() not-owned
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
 --FILE--
 <?php
-$p = FFI::own(FFI::new("uint16_t[2]"), false);
+$p = FFI::new("uint16_t[2]", false);
 var_dump($p);
 
 FFI::free($p);

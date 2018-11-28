@@ -5,8 +5,8 @@ FFI 007: Pointer comparison
 --FILE--
 <?php
 $v = FFI::new("int*[3]");
-$v[0] = FFI::own(FFI::new("int[1]"), false);
-$v[1] = FFI::own(FFI::new("int[1]"), false);
+$v[0] = FFI::new("int[1]", false);
+$v[1] = FFI::new("int[1]", false);
 $v[2] = $v[1];
 $v[1][0] = 42;
 var_dump($v[0] == $v[1]);

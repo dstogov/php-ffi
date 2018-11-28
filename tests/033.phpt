@@ -5,7 +5,7 @@ FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::array()
 --FILE--
 <?php
 $p1 = FFI::new("uint8_t[2]");
-$p2 = FFI::new("uint16_t[2]", true);
+$p2 = FFI::new("uint16_t[2]", true, true);
 var_dump($p1, $p2);
 
 $t1 = FFI::type($p1);

@@ -115,7 +115,7 @@ FFI::type() may be called statically and use only predefined types, or as a meth
 
 Constructs a new C array type from the existing one.
 
-##### function FFI::new(mixed $type [, bool $persistent = false]): FFI\CData
+##### function FFI::new(mixed $type [, bool $own = true [, bool $persistent = false]]): FFI\CData
 
 This function may be used to create a native data structure. The first argument is a C type definition. It may be a **string** or **FFI\CType** object. The following example creates two dimensional array of integers.
 
@@ -126,11 +126,9 @@ var_dump($p, FFI::sizeof($p));
 
 FFI::new() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
 
+By default **FFI::new()** creates "owned" native data structures, that live together with corresponding PHP object, reusing PHP reference-counting and GC. However, in some cases it may be necessary to manually control the life time of the data structure. In this case, the PHP ownership on the corresponding data, may be manually changed, using **false** as the second optianal argument. Later, not-owned CData should be manually deallocated using **FFI::free()**.
+
 Using the optional $persistent argument it's possible to allocate C objects in persistent memory, through malloc(), otherwise memory is allocated in PHP request heap, through emalloc().
-
-##### static function FFI::own(FFI\CData $cdata [, bool $own = true]): FFI\CData
-
-By default **FFI::new()** creates "owned" native data structures, that live together with corresponding PHP object, reusing PHP reference-counting and GC. However, in some cases it may be necessary to manually control the life time of the data structure. In this case, the PHP ownership on the corresponding data, may be manually changed, by **FFI::own(..., false)** and then manually deallocated using **FFI::free()**.
 
 ##### static function FFI::free(FFI\CData $cdata): void
 
