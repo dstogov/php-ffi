@@ -3419,7 +3419,8 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 
 	new_cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
 	new_cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
-	new_cdata->ptr = &cdata->ptr;
+	new_cdata->ptr_holder = cdata->ptr;
+	new_cdata->ptr = &new_cdata->ptr_holder;
 
 	RETURN_OBJ(&new_cdata->std);
 }
