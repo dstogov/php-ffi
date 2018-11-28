@@ -3262,22 +3262,30 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	old_type = ZEND_FFI_TYPE(old_cdata->type);
 	ptr = old_cdata->ptr;
 
-	if (old_type->kind == ZEND_FFI_TYPE_POINTER
-	 && type->kind != ZEND_FFI_TYPE_POINTER
-	 && ZEND_FFI_TYPE(old_type->pointer.type)->kind == ZEND_FFI_TYPE_VOID) {
-		/* automatically dereference void* pointers ??? */
-		ptr = *(void**)ptr;
-	} else if (type->size > old_type->size) {
-		zend_throw_error(zend_ffi_exception_ce, "attempt to cast to larger type");
-		return;
-	}
-
 	cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
 	if (type->kind < ZEND_FFI_TYPE_POINTER) {
 		cdata->std.handlers = &zend_ffi_cdata_value_handlers;
 	}
 	cdata->type = type_ptr;
-	cdata->ptr = ptr;
+
+	if (old_type->kind == ZEND_FFI_TYPE_POINTER
+	 && type->kind != ZEND_FFI_TYPE_POINTER
+	 && ZEND_FFI_TYPE(old_type->pointer.type)->kind == ZEND_FFI_TYPE_VOID) {
+		/* automatically dereference void* pointers ??? */
+		cdata->ptr = *(void**)ptr;
+	} else if (old_type->kind == ZEND_FFI_TYPE_ARRAY
+	 && type->kind == ZEND_FFI_TYPE_POINTER) {
+		cdata->ptr = &cdata->ptr_holder;
+		cdata->ptr_holder = old_cdata->ptr;
+	} else if (type->size > old_type->size) {
+		zend_throw_error(zend_ffi_exception_ce, "attempt to cast to larger type");
+		return;
+	} else if (ptr != &old_cdata->ptr_holder) {
+		cdata->ptr = ptr;
+	} else {
+		cdata->ptr = &cdata->ptr_holder;
+		cdata->ptr_holder = old_cdata->ptr_holder;
+	}
 	if (is_const) {
 		cdata->flags |= ZEND_FFI_FLAG_CONST;
 	}
