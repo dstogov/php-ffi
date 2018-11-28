@@ -159,6 +159,12 @@ foreach($pp as $n => &$p) {
 var_dump($pp);
 ```
 
+##### Pointer arithmetic
+
+CData pointer values may be incremented/decremented by a number. The result is a pointer of the same type moved on given offset.
+
+Two pointers to the same type may be subtracted and return difference (similar to C).
+
 ##### static function FFI::sizeof(mixed $cdata_or_ctype): int
 
 returns size of C data type of the given **FFI\CData** or **FFI\CType**.
@@ -241,7 +247,7 @@ $ffi->printf("Hello world!\n");
 
 ##### Owned and Not-Owned CData
 
-FFI extension uses two kind of native C data structures. "Owned" pointers are created using **FFI::new()**, **clone**ed, or manually converted from "not-owned" by **FFI::own()**. Owned data is deallocated together with last PHP variable, that reference it. This mechanism reuses PHP reference-counting and garbage-collector.
+FFI extension uses two kind of native C data structures. "Owned" pointers are created using **FFI::new([, true])**, **clone**ed. Owned data is deallocated together with last PHP variable, that reference it. This mechanism reuses PHP reference-counting and garbage-collector.
 
 Elements of C arrays and structures, as well as most data structures returned by C functions are "not-owned". They work just as regular C pointers. They may leak memory, if not freed manually using **FFI::free()**, or may become dangling pointers and lead to PHP crashes.
 
@@ -257,10 +263,10 @@ var_dump($p2);               // crash because dereferencing of dangling pointer
 It's possible to change ownership, to avoid this crash, but this would require manual memory management and may lead to memory leaks
 
 ```php
-$p1 = FFI::own(FFI::new("int[2][2]"), false); // $p1 is not-owned pointer
+$p1 = FFI::new("int[2][2]", false); // $p1 is not-owned pointer
 $p2 = $p1[0];
-unset($p1);                                   // $p1 CData is keep alive (memory leak)
-var_dump($p2);                                // works fine, except of memory leak
+unset($p1);                         // $p1 CData is keep alive (memory leak)
+var_dump($p2);                      // works fine, except of memory leak
 ```
 
 ##### PHP Callbacks
