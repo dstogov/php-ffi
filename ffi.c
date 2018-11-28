@@ -673,6 +673,15 @@ again:
 						*(void**)ptr = cdata->ptr;
 					}
 					return SUCCESS;
+				/* Allow transparent assignment of not-owned CData to compatible pointers */
+				} else if (ZEND_FFI_TYPE(cdata->type)->kind != ZEND_FFI_TYPE_POINTER
+				 && zend_ffi_is_compatible_type(ZEND_FFI_TYPE(type->pointer.type), ZEND_FFI_TYPE(cdata->type))) {
+					if (cdata->flags & ZEND_FFI_FLAG_OWNED) {
+						zend_throw_error(zend_ffi_exception_ce, "Attempt to perform assign pointer to owned C data");
+						return FAILURE;
+					}
+					*(void**)ptr = cdata->ptr;
+					return SUCCESS;
 				}
 #if FFI_CLOSURES
 			} else if (ZEND_FFI_TYPE(type->pointer.type)->kind == ZEND_FFI_TYPE_FUNC) {
