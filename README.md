@@ -199,10 +199,6 @@ This function may be called statically and use only predefined types, or as a me
 
 Returns C pointer to the given C data structure. The pointer is not "owned" and won't be free. Anyway, this is a potentially unsafe operation, because the life-time of the returned pointer may be longer than life-time of the source object, and this may cause dangling pointer dereference (like in regular C).
 
-##### static function offset(FFI\CData $cdata, int $offset): FFI\CData;
-
-This function implements C pointer arithmetic. Given $cdata must be a pointer or array and the function will return pointer representing ($cdata + $offset) operation. Again, this is a potentially unsafe operation, because the life-time of the returned pointer may be longer than life-time of the source object, and this may cause dangling pointer dereference
-
 ##### static function load(string $filename): FFI;
 
 Instead of embedding of a long C definition into PHP string, and creating FFI through constructor, it's possible to separate it into a C header file. Note, that C preprocessor directives (e.g. #define or #ifdef) are not supported. And only a couple of special macros may be used especially for FFI.

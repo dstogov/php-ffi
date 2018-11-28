@@ -3578,50 +3578,6 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 }
 /* }}} */
 
-ZEND_METHOD(FFI, offset) /* {{{ */
-{
-	zend_ffi_type *type, *new_type;
-	zend_ffi_cdata *cdata, *new_cdata;
-	zval *zv;
-	zend_long offset;
-
-	ZEND_PARSE_PARAMETERS_START(2, 2)
-		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
-		Z_PARAM_LONG(offset)
-	ZEND_PARSE_PARAMETERS_END();
-
-	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
-	type = ZEND_FFI_TYPE(cdata->type);
-
-	if (type->kind == ZEND_FFI_TYPE_POINTER) {
-		new_cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-		new_cdata->type = type;
-		new_cdata->ptr = (void*)&new_cdata->ptr_holder;
-
-		*(void**)new_cdata->ptr = ((char*)(*(void**)cdata->ptr)) +
-			(ZEND_FFI_TYPE(new_type->pointer.type)->size * offset);
-	} else if (type->kind == ZEND_FFI_TYPE_ARRAY) {
-		new_type = emalloc(sizeof(zend_ffi_type));
-		new_type->kind = ZEND_FFI_TYPE_POINTER;
-		new_type->attr = 0;
-		new_type->size = sizeof(void*);
-		new_type->align = _Alignof(void*);
-		new_type->pointer.type = type->array.type; /* life-time ??? */
-
-		new_cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-		new_cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
-		new_cdata->ptr = (void*)&new_cdata->ptr_holder;
-
-		*(void**)new_cdata->ptr = ((char*)cdata->ptr) +
-			(ZEND_FFI_TYPE(new_type->pointer.type)->size * offset);
-	} else {
-		zend_throw_error(zend_ffi_exception_ce, "offset() works only with pinters and arrays");
-	}
-
-	RETURN_OBJ(&new_cdata->std);
-}
-/* }}} */
-
 ZEND_METHOD(FFI, sizeof) /* {{{ */
 {
 	zval *zv;
@@ -3884,7 +3840,6 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, type,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, array,       NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, addr,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, offset,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, alignof,     NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, memcpy,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
