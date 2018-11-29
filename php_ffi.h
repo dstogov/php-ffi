@@ -31,6 +31,9 @@ ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	/* callbacks */
 	HashTable *callbacks;
 
+	/* weak type references */
+	HashTable *weak_types;
+
 	/* ffi_parser */
 	JMP_BUF	bailout;
 	unsigned const char *buf;
@@ -42,6 +45,7 @@ ZEND_BEGIN_MODULE_GLOBALS(ffi)
 	HashTable *tags;
 	zend_bool allow_vla;
 	zend_bool persistent;
+	uint32_t  default_type_attr;
 ZEND_END_MODULE_GLOBALS(ffi)
 
 ZEND_EXTERN_MODULE_GLOBALS(ffi)
@@ -126,6 +130,7 @@ ZEND_EXTERN_MODULE_GLOBALS(ffi)
 #define	ZEND_FFI_ATTR_GCC_STRUCT        (1<<8)
 
 #define	ZEND_FFI_ATTR_PERSISTENT        (1<<9)
+#define	ZEND_FFI_ATTR_STORED            (1<<10)
 
 #define ZEND_FFI_STRUCT_ATTRS \
 	(ZEND_FFI_ATTR_UNION|ZEND_FFI_ATTR_PACKED|ZEND_FFI_ATTR_MS_STRUCT \
