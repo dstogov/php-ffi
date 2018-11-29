@@ -1371,9 +1371,43 @@ static int zend_ffi_cdata_count_elements(zval *object, zend_long *count) /* {{{ 
 }
 /* }}} */
 
+static zend_object* zend_ffi_add(zend_ffi_cdata *base_cdata, zend_ffi_type *base_type, zend_long offset) /* {{{ */
+{
+	char *ptr;
+	zend_ffi_cdata *cdata =
+		(zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+
+	if (base_type->kind == ZEND_FFI_TYPE_POINTER) {
+		cdata->type = base_type;
+		if (GC_REFCOUNT(&base_cdata->std) == 1) {
+			if (ZEND_FFI_TYPE_IS_OWNED(base_cdata->type)) {
+				/* transfer type ownership */
+				base_cdata->type = base_type;
+				cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(base_type);
+			}
+		}
+		ptr = (char*)(*(void**)base_cdata->ptr);
+	} else {
+		zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
+
+		new_type->kind = ZEND_FFI_TYPE_POINTER;
+		new_type->attr = 0;
+		new_type->size = sizeof(void*);
+		new_type->align = _Alignof(void*);
+		new_type->pointer.type = base_type->array.type; /* life-time ??? */
+		cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
+		ptr = (char*)base_cdata->ptr;
+	}
+	cdata->ptr = &cdata->ptr_holder;
+	cdata->ptr_holder = ptr +
+		offset * ZEND_FFI_TYPE(base_type->array.type)->size;
+	cdata->flags = base_cdata->flags & ZEND_FFI_FLAG_CONST;
+	return &cdata->std;
+}
+/* }}} */
+
 static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op1, zval *op2) /* {{{ */
 {
-	zend_ffi_cdata *cdata;
 	zend_long offset;
 
 	ZVAL_DEREF(op1);
@@ -1385,25 +1419,7 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 		if (type1->kind == ZEND_FFI_TYPE_POINTER || type1->kind == ZEND_FFI_TYPE_ARRAY) {
 			if (opcode == ZEND_ADD) {
 				offset = zval_get_long(op2);
-				cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-				cdata->ptr = &cdata->ptr_holder;
-				if (type1->kind == ZEND_FFI_TYPE_POINTER) {
-					cdata->type = type1;
-					cdata->ptr_holder = (char*)(*(void**)cdata1->ptr) +
-						offset * ZEND_FFI_TYPE(type1->pointer.type)->size;
-				} else {
-					zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
-					new_type->kind = ZEND_FFI_TYPE_POINTER;
-					new_type->attr = 0;
-					new_type->size = sizeof(void*);
-					new_type->align = _Alignof(void*);
-					new_type->pointer.type = type1->array.type; /* life-time ??? */
-					cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
-					cdata->ptr_holder = (char*)cdata1->ptr +
-						offset * ZEND_FFI_TYPE(type1->array.type)->size;
-				}
-				cdata->flags = cdata1->flags & ZEND_FFI_FLAG_CONST;
-				ZVAL_OBJ(result, &cdata->std);
+				ZVAL_OBJ(result, zend_ffi_add(cdata1, type1, offset));
 				return SUCCESS;
 			} else if (opcode == ZEND_SUB) {
 				if (type1->kind == ZEND_FFI_TYPE_POINTER && Z_TYPE_P(op2) == IS_OBJECT && Z_OBJCE_P(op2) == zend_ffi_cdata_ce) {
@@ -1421,25 +1437,7 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 					}
 				}
 				offset = zval_get_long(op2);
-				cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-				cdata->ptr = &cdata->ptr_holder;
-				if (type1->kind == ZEND_FFI_TYPE_POINTER) {
-					cdata->type = type1;
-					cdata->ptr_holder = (char*)(*(void**)cdata1->ptr) -
-						offset * ZEND_FFI_TYPE(type1->pointer.type)->size;
-				} else {
-					zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
-					new_type->kind = ZEND_FFI_TYPE_POINTER;
-					new_type->attr = 0;
-					new_type->size = sizeof(void*);
-					new_type->align = _Alignof(void*);
-					new_type->pointer.type = type1->array.type; /* life-time ??? */
-					cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
-					cdata->ptr_holder = cdata1->ptr -
-						offset * ZEND_FFI_TYPE(type1->pointer.type)->size;
-				}
-				cdata->flags = cdata1->flags & ZEND_FFI_FLAG_CONST;
-				ZVAL_OBJ(result, &cdata->std);
+				ZVAL_OBJ(result, zend_ffi_add(cdata1, type1, -offset));
 				return SUCCESS;
 			}
 		}
@@ -1450,25 +1448,7 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 		if (type2->kind == ZEND_FFI_TYPE_POINTER || type2->kind == ZEND_FFI_TYPE_ARRAY) {
 			if (opcode == ZEND_ADD) {
 				offset = zval_get_long(op1);
-				cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
-				cdata->ptr = &cdata->ptr_holder;
-				if (type2->kind == ZEND_FFI_TYPE_POINTER) {
-					cdata->type = type2;
-					cdata->ptr_holder = (char*)(*(void**)cdata2->ptr) +
-						offset * ZEND_FFI_TYPE(type2->pointer.type)->size;
-				} else {
-					zend_ffi_type *new_type = emalloc(sizeof(zend_ffi_type));
-					new_type->kind = ZEND_FFI_TYPE_POINTER;
-					new_type->attr = 0;
-					new_type->size = sizeof(void*);
-					new_type->align = _Alignof(void*);
-					new_type->pointer.type = type2->array.type; /* life-time ??? */
-					cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
-					cdata->ptr_holder = (char*)cdata2->ptr +
-						offset * ZEND_FFI_TYPE(type2->pointer.type)->size;
-				}
-				cdata->flags = cdata2->flags & ZEND_FFI_FLAG_CONST;
-				ZVAL_OBJ(result, &cdata->std);
+				ZVAL_OBJ(result, zend_ffi_add(cdata2, type2, offset));
 				return SUCCESS;
 			}
 		}
