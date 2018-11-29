@@ -1420,6 +1420,9 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 			if (opcode == ZEND_ADD) {
 				offset = zval_get_long(op2);
 				ZVAL_OBJ(result, zend_ffi_add(cdata1, type1, offset));
+				if (result == op1) {
+					OBJ_RELEASE(&cdata1->std);
+				}
 				return SUCCESS;
 			} else if (opcode == ZEND_SUB) {
 				if (Z_TYPE_P(op2) == IS_OBJECT && Z_OBJCE_P(op2) == zend_ffi_cdata_ce) {
@@ -1453,6 +1456,9 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 				}
 				offset = zval_get_long(op2);
 				ZVAL_OBJ(result, zend_ffi_add(cdata1, type1, -offset));
+				if (result == op1) {
+					OBJ_RELEASE(&cdata1->std);
+				}
 				return SUCCESS;
 			}
 		}
