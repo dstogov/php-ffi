@@ -3419,7 +3419,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 ZEND_METHOD(FFI, type) /* {{{ */
 {
-	zval *zv;
+	zval *zv, *arg;
 	zend_ffi_ctype *ctype;
 	zend_ffi_type *type;
 
@@ -3427,6 +3427,8 @@ ZEND_METHOD(FFI, type) /* {{{ */
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
 
+	arg = zv;
+	ZVAL_DEREF(zv);
 	if (Z_TYPE_P(zv) == IS_STRING) {
 		zend_string *type_def = Z_STR_P(zv);
 
@@ -3476,7 +3478,8 @@ ZEND_METHOD(FFI, type) /* {{{ */
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 
 		if (ZEND_FFI_TYPE_IS_OWNED(cdata->type)
-		 && GC_REFCOUNT(&cdata->std) == 1) {
+		 && GC_REFCOUNT(&cdata->std) == 1
+		 && Z_REFCOUNT_P(arg) == 1) {
 			/* transfer type ownership */
 			type = cdata->type;
 			cdata->type = ZEND_FFI_TYPE(cdata->type);
@@ -3862,6 +3865,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_func_free, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_type, 0, 0, 1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, __construct, NULL,              ZEND_ACC_PUBLIC)
 	ZEND_ME(FFI, load,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -3869,7 +3876,7 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, new,         NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free,        arginfo_func_free, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, type,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, type,        arginfo_func_type, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, array,       NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, addr,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
