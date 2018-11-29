@@ -19,6 +19,7 @@ $p++;
 var_dump($p, $q);
 var_dump($p - $q);
 var_dump($q - $p);
+var_dump($q - $a);
 ?>
 --EXPECTF--
 int(0)
@@ -34,3 +35,4 @@ object(FFI\CData:int32_t*)#%d (1) {
 }
 int(3)
 int(-3)
+int(5)

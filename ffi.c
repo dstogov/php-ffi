@@ -1422,18 +1422,33 @@ static int zend_ffi_cdata_do_operation(zend_uchar opcode, zval *result, zval *op
 				ZVAL_OBJ(result, zend_ffi_add(cdata1, type1, offset));
 				return SUCCESS;
 			} else if (opcode == ZEND_SUB) {
-				if (type1->kind == ZEND_FFI_TYPE_POINTER && Z_TYPE_P(op2) == IS_OBJECT && Z_OBJCE_P(op2) == zend_ffi_cdata_ce) {
+				if (Z_TYPE_P(op2) == IS_OBJECT && Z_OBJCE_P(op2) == zend_ffi_cdata_ce) {
 					zend_ffi_cdata *cdata2 = (zend_ffi_cdata*)Z_OBJ_P(op2);
 					zend_ffi_type *type2 = ZEND_FFI_TYPE(cdata2->type);
 
-					if (type2->kind == ZEND_FFI_TYPE_POINTER &&
-					    zend_ffi_is_same_type(ZEND_FFI_TYPE(type1->pointer.type), ZEND_FFI_TYPE(type2->pointer.type))) {
-						ZVAL_LONG(result,
-							(zend_long)(
-								(char*)(*(void**)cdata1->ptr) -
-								(char*)(*(void**)cdata2->ptr)) /
-							(zend_long)ZEND_FFI_TYPE(type1->pointer.type)->size);
-						return SUCCESS;
+					if (type2->kind == ZEND_FFI_TYPE_POINTER || type2->kind == ZEND_FFI_TYPE_ARRAY) {
+						zend_ffi_type *t1, *t2;
+						char *p1, *p2;
+
+						if (type1->kind == ZEND_FFI_TYPE_POINTER) {
+							t1 = ZEND_FFI_TYPE(type1->pointer.type);
+							p1 = (char*)(*(void**)cdata1->ptr);
+						} else {
+							t1 = ZEND_FFI_TYPE(type1->array.type);
+							p1 = cdata1->ptr;
+						}
+						if (type2->kind == ZEND_FFI_TYPE_POINTER) {
+							t2 = ZEND_FFI_TYPE(type2->pointer.type);
+							p2 = (char*)(*(void**)cdata2->ptr);
+						} else {
+							t2 = ZEND_FFI_TYPE(type2->array.type);
+							p2 = cdata2->ptr;
+						}
+						if (zend_ffi_is_same_type(t1, t2)) {
+							ZVAL_LONG(result,
+								(zend_long)(p1 - p2) / (zend_long)t1->size);
+							return SUCCESS;
+						}
 					}
 				}
 				offset = zval_get_long(op2);
