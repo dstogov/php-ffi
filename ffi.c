@@ -3281,14 +3281,17 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	} else {
 		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(ztype);
 
-		if (ZEND_FFI_TYPE_IS_OWNED(ctype->type)
-		 && GC_REFCOUNT(&ctype->std) == 1) {
-			/* transfer type ownership */
-			type_ptr = ctype->type;
-			type = ZEND_FFI_TYPE(type_ptr);
-			ctype->type = type;
-		} else {
-			type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		type_ptr = type = ctype->type;
+		if (ZEND_FFI_TYPE_IS_OWNED(type)) {
+			type = ZEND_FFI_TYPE(type);
+			if (!(type->attr & ZEND_FFI_ATTR_STORED)) {
+				if (GC_REFCOUNT(&ctype->std) == 1) {
+					/* transfer type ownership */
+					ctype->type = type;
+				} else {
+					ctype->type = type_ptr = type = zend_ffi_remember_type(type);
+				}
+			}
 		}
 	}
 
@@ -3415,14 +3418,17 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	} else {
 		zend_ffi_ctype *ctype = (zend_ffi_ctype*)Z_OBJ_P(ztype);
 
-		if (ZEND_FFI_TYPE_IS_OWNED(ctype->type)
-		 && GC_REFCOUNT(&ctype->std) == 1) {
-			/* transfer type ownership */
-			type_ptr = ctype->type;
-			type = ZEND_FFI_TYPE(type_ptr);
-			ctype->type = type;
-		} else {
-			type_ptr = type = ZEND_FFI_TYPE(ctype->type);
+		type_ptr = type = ctype->type;
+		if (ZEND_FFI_TYPE_IS_OWNED(type)) {
+			type = ZEND_FFI_TYPE(type);
+			if (!(type->attr & ZEND_FFI_ATTR_STORED)) {
+				if (GC_REFCOUNT(&ctype->std) == 1) {
+					/* transfer type ownership */
+					ctype->type = type;
+				} else {
+					ctype->type = type_ptr = type = zend_ffi_remember_type(type);
+				}
+			}
 		}
 	}
 
@@ -3534,14 +3540,18 @@ ZEND_METHOD(FFI, type) /* {{{ */
 	} else if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 
-		if (ZEND_FFI_TYPE_IS_OWNED(cdata->type)
-		 && GC_REFCOUNT(&cdata->std) == 1
-		 && Z_REFCOUNT_P(arg) == 1) {
-			/* transfer type ownership */
-			type = cdata->type;
-			cdata->type = ZEND_FFI_TYPE(cdata->type);
-		} else {
-			type = ZEND_FFI_TYPE(cdata->type);
+		type = cdata->type;
+		if (ZEND_FFI_TYPE_IS_OWNED(type)) {
+			type = ZEND_FFI_TYPE(type);
+			if (!(type->attr & ZEND_FFI_ATTR_STORED)) {
+				if (GC_REFCOUNT(&cdata->std) == 1 && Z_REFCOUNT_P(arg) == 1) {
+					/* transfer type ownership */
+					cdata->type = type;
+					type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+				} else {
+					cdata->type = type = zend_ffi_remember_type(type);
+				}
+			}
 		}
 	} else {
 		zend_wrong_parameter_class_error(1, "FFI\\CData or string", zv);
@@ -3585,11 +3595,16 @@ ZEND_METHOD(FFI, array) /* {{{ */
 		return;
 	}
 
-	if (GC_REFCOUNT(&ctype->std) == 1
-	 && ZEND_FFI_TYPE_IS_OWNED(ctype->type)) {
-		/* transfer type ownership */
-		ctype->type = type;
-		type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+	if (ZEND_FFI_TYPE_IS_OWNED(ctype->type)) {
+		if (!(type->attr & ZEND_FFI_ATTR_STORED)) {
+			if (GC_REFCOUNT(&ctype->std) == 1) {
+				/* transfer type ownership */
+				ctype->type = type;
+				type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+			} else {
+				ctype->type = type = zend_ffi_remember_type(type);
+			}
+		}
 	}
 
 	ZEND_HASH_REVERSE_FOREACH_VAL(dims, val) {
