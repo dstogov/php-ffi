@@ -1914,7 +1914,11 @@ static void zend_ffi_cdata_dtor(zend_ffi_cdata *cdata) /* {{{ */
 {
 	zend_ffi_type_dtor(cdata->type);
 	if (cdata->flags & ZEND_FFI_FLAG_OWNED) {
-		pefree(cdata->ptr, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
+		if (cdata->ptr != (void*)&cdata->ptr_holder) {
+			pefree(cdata->ptr, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
+		} else {
+			pefree(cdata->ptr_holder, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
+		}
 	}
 }
 /* }}} */
@@ -3465,7 +3469,14 @@ ZEND_METHOD(FFI, type) /* {{{ */
 	} else if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 
-		type = ZEND_FFI_TYPE(cdata->type);
+		if (ZEND_FFI_TYPE_IS_OWNED(cdata->type)
+		 && GC_REFCOUNT(&cdata->std) == 1) {
+			/* transfer type ownership */
+			type = cdata->type;
+			cdata->type = ZEND_FFI_TYPE(cdata->type);
+		} else {
+			type = ZEND_FFI_TYPE(cdata->type);
+		}
 	} else {
 		zend_wrong_parameter_class_error(1, "FFI\\CData or string", zv);
 		return;
@@ -3506,6 +3517,13 @@ ZEND_METHOD(FFI, array) /* {{{ */
 	} else if (type->attr & ZEND_FFI_ATTR_INCOMPLETE_TAG) {
 		zend_throw_error(zend_ffi_exception_ce, "array of incomplete type is not allowed");
 		return;
+	}
+
+	if (GC_REFCOUNT(&ctype->std) == 1
+	 && ZEND_FFI_TYPE_IS_OWNED(ctype->type)) {
+		/* transfer type ownership */
+		ctype->type = type;
+		type = ZEND_FFI_TYPE_MAKE_OWNED(type);
 	}
 
 	ZEND_HASH_REVERSE_FOREACH_VAL(dims, val) {
@@ -3568,6 +3586,19 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 	new_cdata->type = ZEND_FFI_TYPE_MAKE_OWNED(new_type);
 	new_cdata->ptr_holder = cdata->ptr;
 	new_cdata->ptr = &new_cdata->ptr_holder;
+
+	if (GC_REFCOUNT(&cdata->std) == 1) {
+		if (ZEND_FFI_TYPE_IS_OWNED(cdata->type)) {
+			/* transfer type ownership */
+			cdata->type = type;
+			new_type->pointer.type = ZEND_FFI_TYPE_MAKE_OWNED(type);
+		}
+		if (cdata->flags & ZEND_FFI_FLAG_OWNED) {
+			/* transfer ownership */
+			cdata->flags &= ~ZEND_FFI_FLAG_OWNED;
+			new_cdata->flags |= ZEND_FFI_FLAG_OWNED;
+		}
+	}
 
 	RETURN_OBJ(&new_cdata->std);
 }
