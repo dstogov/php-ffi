@@ -3968,6 +3968,25 @@ ZEND_METHOD(FFI, string) /* {{{ */
 }
 /* }}} */
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_ffi, 0, 0, 0)
+	ZEND_ARG_INFO(0, code)
+	ZEND_ARG_INFO(0, lib)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_load, 0, 0, 1)
+	ZEND_ARG_INFO(0, filename)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_scope, 0, 0, 1)
+	ZEND_ARG_INFO(0, scope_name)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_new, 0, 0, 1)
+	ZEND_ARG_INFO(0, type)
+	ZEND_ARG_INFO(0, owned)
+	ZEND_ARG_INFO(0, persistent)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_free, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
@@ -3979,6 +3998,11 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_type, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_array, 0, 0, 2)
+	ZEND_ARG_INFO(0, type)
+	ZEND_ARG_INFO(0, dims)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_addr, 0, 0, 1)
@@ -4017,14 +4041,14 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_func_string, 0, 0, 1)
 ZEND_END_ARG_INFO()
 
 static const zend_function_entry zend_ffi_functions[] = {
-	ZEND_ME(FFI, __construct, NULL,                 ZEND_ACC_PUBLIC)
-	ZEND_ME(FFI, load,        NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, scope,       NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, new,         NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, __construct, arginfo_func_ffi,     ZEND_ACC_PUBLIC)
+	ZEND_ME(FFI, load,        arginfo_func_load,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, scope,       arginfo_func_scope,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, new,         arginfo_func_new,     ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, free,        arginfo_func_free,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast,        arginfo_func_cast,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, type,        arginfo_func_type,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, array,       NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, array,       arginfo_func_array,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, addr,        arginfo_func_addr,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof,      arginfo_func_sizeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, alignof,     arginfo_func_alignof, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
