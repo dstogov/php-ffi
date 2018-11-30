@@ -3374,7 +3374,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	zend_ffi_type *old_type, *type, *type_ptr;
 	zend_ffi_cdata *old_cdata, *cdata;
 	zend_bool is_const = 0;
-	zval *zv;
+	zval *zv, *arg;
 	void *ptr;
 
 	ZEND_PARSE_PARAMETERS_START(2, 2)
@@ -3383,8 +3383,14 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 		} else {
 			Z_PARAM_OBJECT_OF_CLASS(ztype, zend_ffi_ctype_ce)
 		}
-		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
+
+	arg = zv;
+	ZVAL_DEREF(zv);
+	if (Z_TYPE_P(zv) != IS_OBJECT || Z_OBJCE_P(zv) != zend_ffi_cdata_ce) {
+		zend_wrong_parameter_class_error(2, "FFI\\CData", zv);
+	}
 
 	if (type_def) {
 		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
@@ -3486,7 +3492,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	}
 
 	if (old_cdata->flags & ZEND_FFI_FLAG_OWNED) {
-		if (GC_REFCOUNT(&old_cdata->std) == 1) {
+		if (GC_REFCOUNT(&old_cdata->std) == 1 && Z_REFCOUNT_P(arg) == 1) {
 			/* transfer ownership */
 			old_cdata->flags &= ~ZEND_FFI_FLAG_OWNED;
 			cdata->flags |= ZEND_FFI_FLAG_OWNED;
@@ -3668,11 +3674,17 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 {
 	zend_ffi_type *type, *new_type;
 	zend_ffi_cdata *cdata, *new_cdata;
-	zval *zv;
+	zval *zv, *arg;
 
 	ZEND_PARSE_PARAMETERS_START(1, 1)
-		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_ZVAL(zv)
 	ZEND_PARSE_PARAMETERS_END();
+
+	arg = zv;
+	ZVAL_DEREF(zv);
+	if (Z_TYPE_P(zv) != IS_OBJECT || Z_OBJCE_P(zv) != zend_ffi_cdata_ce) {
+		zend_wrong_parameter_class_error(1, "FFI\\CData", zv);
+	}
 
 	cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 	type = ZEND_FFI_TYPE(cdata->type);
@@ -3690,7 +3702,7 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 	new_cdata->ptr_holder = cdata->ptr;
 	new_cdata->ptr = &new_cdata->ptr_holder;
 
-	if (GC_REFCOUNT(&cdata->std) == 1) {
+	if (GC_REFCOUNT(&cdata->std) == 1 && Z_REFCOUNT_P(arg) == 1) {
 		if (ZEND_FFI_TYPE_IS_OWNED(cdata->type)) {
 			/* transfer type ownership */
 			cdata->type = type;
@@ -3716,6 +3728,7 @@ ZEND_METHOD(FFI, sizeof) /* {{{ */
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
 
+	ZVAL_DEREF(zv);
 	if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 		type = ZEND_FFI_TYPE(cdata->type);
@@ -3740,6 +3753,7 @@ ZEND_METHOD(FFI, alignof) /* {{{ */
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
 
+	ZVAL_DEREF(zv);
 	if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 		type = ZEND_FFI_TYPE(cdata->type);
@@ -3757,20 +3771,15 @@ ZEND_METHOD(FFI, alignof) /* {{{ */
 
 ZEND_METHOD(FFI, memcpy) /* {{{ */
 {
-	zval *zv1, *zv2 = NULL;
+	zval *zv1, *zv2;
 	zend_ffi_cdata *cdata1, *cdata2;
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
 	zend_long size;
-	zend_string *str2 = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
-		Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
-		if (Z_TYPE_P(EX_VAR_NUM(1)) == IS_STRING) {
-			Z_PARAM_STR(str2)
-		} else {
-			Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
-		}
+		Z_PARAM_OBJECT_OF_CLASS_EX2(zv1, zend_ffi_cdata_ce, 0, 1, 0);
+		Z_PARAM_ZVAL(zv2)
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
 
@@ -3785,13 +3794,15 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 			return;
 		}
 	}
-	if (str2) {
-		ptr2 = ZSTR_VAL(str2);
-		if (size > ZSTR_LEN(str2)) {
+
+	ZVAL_DEREF(zv2);
+	if (Z_TYPE_P(zv2) == IS_STRING) {
+		ptr2 = Z_STRVAL_P(zv2);
+		if (size > Z_STRLEN_P(zv2)) {
 			zend_throw_error(zend_ffi_exception_ce, "attempt to read over string boundary");
 			return;
 		}
-	} else {
+	} else if (Z_TYPE_P(zv2) == IS_OBJECT && Z_OBJCE_P(zv2) == zend_ffi_cdata_ce) {
 		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
 		type2 = ZEND_FFI_TYPE(cdata2->type);
 		if (type2->kind == ZEND_FFI_TYPE_POINTER) {
@@ -3803,6 +3814,9 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 				return;
 			}
 		}
+	} else {
+		zend_wrong_parameter_class_error(2, "FFI\\CData or string", zv2);
+		return;
 	}
 
 	memcpy(ptr1, ptr2, size);
@@ -3811,36 +3825,27 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 
 ZEND_METHOD(FFI, memcmp) /* {{{ */
 {
-	zval *zv1 = NULL, *zv2 = NULL;
+	zval *zv1, *zv2;
 	zend_ffi_cdata *cdata1, *cdata2;
 	zend_ffi_type *type1, *type2;
 	void *ptr1, *ptr2;
 	zend_long size;
 	int ret;
-	zend_string *str1 = NULL;
-	zend_string *str2 = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
-		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
-			Z_PARAM_STR(str1)
-		} else {
-			Z_PARAM_OBJECT_OF_CLASS(zv1, zend_ffi_cdata_ce)
-		}
-		if (Z_TYPE_P(EX_VAR_NUM(1)) == IS_STRING) {
-			Z_PARAM_STR(str2)
-		} else {
-			Z_PARAM_OBJECT_OF_CLASS(zv2, zend_ffi_cdata_ce)
-		}
+		Z_PARAM_ZVAL(zv1);
+		Z_PARAM_ZVAL(zv2);
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (str1) {
-		ptr1 = ZSTR_VAL(str1);
-		if (size > ZSTR_LEN(str1)) {
+	ZVAL_DEREF(zv1);
+	if (Z_TYPE_P(zv1) == IS_STRING) {
+		ptr1 = Z_STRVAL_P(zv1);
+		if (size > Z_STRLEN_P(zv1)) {
 			zend_throw_error(zend_ffi_exception_ce, "attempt to read over string boundary");
 			return;
 		}
-	} else {
+	} else if (Z_TYPE_P(zv1) == IS_OBJECT && Z_OBJCE_P(zv1) == zend_ffi_cdata_ce) {
 		cdata1 = (zend_ffi_cdata*)Z_OBJ_P(zv1);
 		type1 = ZEND_FFI_TYPE(cdata1->type);
 		if (type1->kind == ZEND_FFI_TYPE_POINTER) {
@@ -3852,14 +3857,19 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 				return;
 			}
 		}
+	} else {
+		zend_wrong_parameter_class_error(1, "FFI\\CData or string", zv1);
+		return;
 	}
-	if (str2) {
-		ptr2 = ZSTR_VAL(str2);
-		if (size > ZSTR_LEN(str2)) {
+
+	ZVAL_DEREF(zv2);
+	if (Z_TYPE_P(zv2) == IS_STRING) {
+		ptr2 = Z_STRVAL_P(zv2);
+		if (size > Z_STRLEN_P(zv2)) {
 			zend_throw_error(zend_ffi_exception_ce, "attempt to read over string boundary");
 			return;
 		}
-	} else {
+	} else if (Z_TYPE_P(zv2) == IS_OBJECT && Z_OBJCE_P(zv2) == zend_ffi_cdata_ce) {
 		cdata2 = (zend_ffi_cdata*)Z_OBJ_P(zv2);
 		type2 = ZEND_FFI_TYPE(cdata2->type);
 		if (type2->kind == ZEND_FFI_TYPE_POINTER) {
@@ -3871,6 +3881,9 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 				return;
 			}
 		}
+	} else {
+		zend_wrong_parameter_class_error(2, "FFI\\CData or string", zv2);
+		return;
 	}
 
 	ret = memcmp(ptr1, ptr2, size);
@@ -3893,7 +3906,7 @@ ZEND_METHOD(FFI, memset) /* {{{ */
 	zend_long ch, size;
 
 	ZEND_PARSE_PARAMETERS_START(3, 3)
-		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
 		Z_PARAM_LONG(ch)
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
@@ -3923,7 +3936,7 @@ ZEND_METHOD(FFI, string) /* {{{ */
 	zend_long size = 0;
 
 	ZEND_PARSE_PARAMETERS_START(1, 2)
-		Z_PARAM_OBJECT_OF_CLASS(zv, zend_ffi_cdata_ce)
+		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(size)
 	ZEND_PARSE_PARAMETERS_END();
@@ -3959,26 +3972,66 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_func_free, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_cast, 0, 0, 2)
+	ZEND_ARG_INFO(0, type)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_type, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_addr, 0, 0, 1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_sizeof, 0, 0, 1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_alignof, 0, 0, 1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_memcpy, 0, 0, 3)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, dst)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, src)
+	ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_memcmp, 0, 0, 3)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr2)
+	ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_memset, 0, 0, 3)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+	ZEND_ARG_INFO(0, ch)
+	ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_string, 0, 0, 1)
+	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
+	ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry zend_ffi_functions[] = {
-	ZEND_ME(FFI, __construct, NULL,              ZEND_ACC_PUBLIC)
-	ZEND_ME(FFI, load,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, scope,       NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, new,         NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, free,        arginfo_func_free, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, cast,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, type,        arginfo_func_type, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, array,       NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, addr,        NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, sizeof,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, alignof,     NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, memcpy,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, memcmp,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, memset,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, string,      NULL,              ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, __construct, NULL,                 ZEND_ACC_PUBLIC)
+	ZEND_ME(FFI, load,        NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, scope,       NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, new,         NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, free,        arginfo_func_free,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, cast,        arginfo_func_cast,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, type,        arginfo_func_type,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, array,       NULL,                 ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, addr,        arginfo_func_addr,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, sizeof,      arginfo_func_sizeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, alignof,     arginfo_func_alignof, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memcpy,      arginfo_func_memcpy,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memcmp,      arginfo_func_memcmp,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, memset,      arginfo_func_memset,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, string,      arginfo_func_string,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_FE_END
 };
 
