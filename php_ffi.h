@@ -196,7 +196,7 @@ int zend_ffi_parse_decl(const char *str, size_t len);
 int zend_ffi_parse_type(const char *str, size_t len, zend_ffi_dcl *dcl);
 
 /* parser callbacks */
-void zend_ffi_parser_error(const char *msg, ...) ZEND_NORETURN;
+void ZEND_NORETURN zend_ffi_parser_error(const char *msg, ...);
 int zend_ffi_is_typedef_name(const char *name, size_t name_len);
 void zend_ffi_resolve_typedef(const char *name, size_t name_len, zend_ffi_dcl *dcl);
 void zend_ffi_resolve_const(const char *name, size_t name_len, zend_ffi_val *val);
@@ -250,7 +250,7 @@ void zend_ffi_expr_sizeof_type(zend_ffi_val *val, zend_ffi_dcl *dcl);
 void zend_ffi_expr_alignof_val(zend_ffi_val *val);
 void zend_ffi_expr_alignof_type(zend_ffi_val *val, zend_ffi_dcl *dcl);
 
-static zend_always_inline inline void zend_ffi_val_error(zend_ffi_val *val) /* {{{ */
+static zend_always_inline void zend_ffi_val_error(zend_ffi_val *val) /* {{{ */
 {
 	val->kind = ZEND_FFI_VAL_ERROR;
 }
