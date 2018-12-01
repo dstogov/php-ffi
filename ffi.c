@@ -5389,6 +5389,7 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 		case ZEND_FFI_ABI_CDECL:
 			type->func.abi = FFI_DEFAULT_ABI;
 			break;
+#ifndef _WIN64
 		case ZEND_FFI_ABI_FASTCALL:
 			type->func.abi = FFI_FASTCALL;
 			break;
@@ -5398,6 +5399,7 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 		case ZEND_FFI_ABI_STDCALL:
 			type->func.abi = FFI_STDCALL;
 			break;
+#endif
 #if 0
 		case ZEND_FFI_ABI_PASCAL:
 			type->func.abi = FFI_PASCAL;
@@ -5413,9 +5415,11 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 			type->func.abi = FFI_MS_CDECL;
 			break;
 #endif
+#ifndef _WIN32
 		case ZEND_FFI_ABI_SYSV:
 			type->func.abi = FFI_SYSV;
 			break;
+#endif
 		default:
 			type->func.abi = FFI_DEFAULT_ABI;
 			zend_ffi_parser_error("unsupported calling convention line %d", FFI_G(line));
