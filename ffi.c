@@ -205,6 +205,7 @@ static zend_always_inline void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
 		return;
 	}
 }
+/* }}} */
 
 static zend_always_inline void zend_ffi_object_init(zend_object *object, zend_class_entry *ce) /* {{{ */
 {
@@ -403,6 +404,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow(void *ptr, 
 	cdata->ptr = ptr;
 	return cdata;
 }
+/* }}} */
 
 static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ptr(void *ptr, zend_ffi_type *type, zend_ffi_flags flags) /* {{{ */
 {
@@ -416,6 +418,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ptr(void *p
 	*(void**)cdata->ptr = *(void**)ptr;
 	return cdata;
 }
+/* }}} */
 
 static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ret(void *ptr, zend_ffi_type *type, zend_ffi_flags flags) /* {{{ */
 {
@@ -440,6 +443,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ret(void *p
 	}
 	return cdata;
 }
+/* }}} */
 
 static zend_always_inline void zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv, zend_ffi_flags flags, zend_bool is_ret) /* {{{ */
 {
