@@ -33,7 +33,7 @@
 #define yy_text FFI_G(text)
 #define yy_line FFI_G(line)
 
-static const char * sym_name[] = {
+static const char * sym_name[] = {/*{{{*/
 	"<EOF>",
 	",",
 	";",
@@ -130,7 +130,7 @@ static const char * sym_name[] = {
 	"<ONE_LINE_COMMENT>",
 	"<COMMENT>",
 	NULL
-};
+};/*}}}*/
 
 static void yy_error(const char *msg) {
 	zend_ffi_parser_error("%s at line %d", msg, yy_line);
@@ -4974,4 +4974,6 @@ int zend_ffi_parse_type(const char *str, size_t len, zend_ffi_dcl *dcl) {
  * tab-width: 4
  * c-basic-offset: 4
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */
