@@ -4736,11 +4736,13 @@ static void zend_ffi_finalize_type(zend_ffi_dcl *dcl) /* {{{ */
 			case ZEND_FFI_DCL_DOUBLE:
 				dcl->type = (zend_ffi_type*)&zend_ffi_type_double;
 				break;
-#ifdef HAVE_LONG_DOUBLE
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_DOUBLE:
+#ifdef _WIN32
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_double;
+#else
 				dcl->type = (zend_ffi_type*)&zend_ffi_type_long_double;
-				break;
 #endif
+				break;
 			case ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_COMPLEX:
 			case ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_COMPLEX:
 			case ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_COMPLEX:
@@ -6322,9 +6324,11 @@ void zend_ffi_expr_sizeof_val(zend_ffi_val *val) /* {{{ */
 	} else if (val->kind == ZEND_FFI_VAL_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
 		val->u64 = zend_ffi_type_double.size;
-#ifdef HAVE_LONG_DOUBLE
 	} else if (val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
+#ifdef _WIN32
+		val->u64 = zend_ffi_type_double.size;
+#else
 		val->u64 = zend_ffi_type_long_double.size;
 #endif
 	} else if (val->kind == ZEND_FFI_VAL_CHAR) {
