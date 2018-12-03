@@ -205,6 +205,7 @@ static zend_always_inline void zend_ffi_type_dtor(zend_ffi_type *type) /* {{{ */
 		return;
 	}
 }
+/* }}} */
 
 static zend_always_inline void zend_ffi_object_init(zend_object *object, zend_class_entry *ce) /* {{{ */
 {
@@ -403,6 +404,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow(void *ptr, 
 	cdata->ptr = ptr;
 	return cdata;
 }
+/* }}} */
 
 static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ptr(void *ptr, zend_ffi_type *type, zend_ffi_flags flags) /* {{{ */
 {
@@ -416,6 +418,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ptr(void *p
 	*(void**)cdata->ptr = *(void**)ptr;
 	return cdata;
 }
+/* }}} */
 
 static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ret(void *ptr, zend_ffi_type *type, zend_ffi_flags flags) /* {{{ */
 {
@@ -440,6 +443,7 @@ static zend_never_inline zend_ffi_cdata *zend_ffi_cdata_to_zval_slow_ret(void *p
 	}
 	return cdata;
 }
+/* }}} */
 
 static zend_always_inline void zend_ffi_cdata_to_zval(zend_ffi_cdata *cdata, void *ptr, zend_ffi_type *type, int read_type, zval *rv, zend_ffi_flags flags, zend_bool is_ret) /* {{{ */
 {
@@ -4733,7 +4737,11 @@ static void zend_ffi_finalize_type(zend_ffi_dcl *dcl) /* {{{ */
 				dcl->type = (zend_ffi_type*)&zend_ffi_type_double;
 				break;
 			case ZEND_FFI_DCL_LONG|ZEND_FFI_DCL_DOUBLE:
+#ifdef _WIN32
+				dcl->type = (zend_ffi_type*)&zend_ffi_type_double;
+#else
 				dcl->type = (zend_ffi_type*)&zend_ffi_type_long_double;
+#endif
 				break;
 			case ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_COMPLEX:
 			case ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_COMPLEX:
@@ -5383,6 +5391,7 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 		case ZEND_FFI_ABI_CDECL:
 			type->func.abi = FFI_DEFAULT_ABI;
 			break;
+#ifndef _WIN64
 		case ZEND_FFI_ABI_FASTCALL:
 			type->func.abi = FFI_FASTCALL;
 			break;
@@ -5392,6 +5401,7 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 		case ZEND_FFI_ABI_STDCALL:
 			type->func.abi = FFI_STDCALL;
 			break;
+#endif
 #if 0
 		case ZEND_FFI_ABI_PASCAL:
 			type->func.abi = FFI_PASCAL;
@@ -5407,9 +5417,11 @@ void zend_ffi_make_func_type(zend_ffi_dcl *dcl, HashTable *args) /* {{{ */
 			type->func.abi = FFI_MS_CDECL;
 			break;
 #endif
+#ifndef _WIN32
 		case ZEND_FFI_ABI_SYSV:
 			type->func.abi = FFI_SYSV;
 			break;
+#endif
 		default:
 			type->func.abi = FFI_DEFAULT_ABI;
 			zend_ffi_parser_error("unsupported calling convention line %d", FFI_G(line));
@@ -5606,6 +5618,11 @@ void zend_ffi_set_abi(zend_ffi_dcl *dcl, uint16_t abi) /* {{{ */
 }
 /* }}} */
 
+#ifndef __BIGGEST_ALIGNMENT__
+/* XXX need something better, perhaps with regard to SIMD, etc. */
+# define __BIGGEST_ALIGNMENT__ sizeof(size_t)
+#endif
+
 void zend_ffi_add_attribute(zend_ffi_dcl *dcl, const char *name, size_t name_len) /* {{{ */
 {
 	if (name_len == sizeof("cdecl")-1 && memcmp(name, "cdecl", sizeof("cdecl")-1) == 0) {
@@ -5749,9 +5766,11 @@ void zend_ffi_align_as_val(zend_ffi_dcl *dcl, zend_ffi_val *align_val) /* {{{ */
 		case ZEND_FFI_VAL_DOUBLE:
 			dcl->align = zend_ffi_type_double.align;
 			break;
+#ifdef HAVE_LONG_DOUBLE
 		case ZEND_FFI_VAL_LONG_DOUBLE:
 			dcl->align = zend_ffi_type_long_double.align;
 			break;
+#endif
 		case ZEND_FFI_VAL_CHAR:
 		case ZEND_FFI_VAL_STRING:
 			dcl->align = zend_ffi_type_char.align;
@@ -6307,7 +6326,11 @@ void zend_ffi_expr_sizeof_val(zend_ffi_val *val) /* {{{ */
 		val->u64 = zend_ffi_type_double.size;
 	} else if (val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
+#ifdef _WIN32
+		val->u64 = zend_ffi_type_double.size;
+#else
 		val->u64 = zend_ffi_type_long_double.size;
+#endif
 	} else if (val->kind == ZEND_FFI_VAL_CHAR) {
 		val->kind = ZEND_FFI_VAL_UINT32;
 		val->u64 = zend_ffi_type_char.size;
@@ -6347,9 +6370,11 @@ void zend_ffi_expr_alignof_val(zend_ffi_val *val) /* {{{ */
 	} else if (val->kind == ZEND_FFI_VAL_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
 		val->u64 = zend_ffi_type_double.align;
+#ifdef HAVE_LONG_DOUBLE
 	} else if (val->kind == ZEND_FFI_VAL_LONG_DOUBLE) {
 		val->kind = ZEND_FFI_VAL_UINT32;
 		val->u64 = zend_ffi_type_long_double.align;
+#endif
 	} else if (val->kind == ZEND_FFI_VAL_CHAR) {
 		val->kind = ZEND_FFI_VAL_UINT32;
 		val->u64 = zend_ffi_type_char.size;
@@ -6519,4 +6544,6 @@ void zend_ffi_val_character(zend_ffi_val *val, const char *str, size_t str_len) 
  * tab-width: 4
  * c-basic-offset: 4
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */
