@@ -269,6 +269,10 @@ var_dump($p2);                      // works fine, except of memory leak
 
 It's possible to assign PHP function to native function variable (or pass it as a function argument). This seems to work, but this functionality is not supported on all libffi platforms, it is not efficient and leaks resources by the end of request.
 
+##### FFI API restriction
+
+With FFI users may do almost anything, like in C, and therefor may crash PHP in thousand ways.  It's possible to completely disable or enable all FFI functions using ffi.enable=0/1 configuration directives, or limit FFI usage to preloaded scripts using ffi.enable=preload (this is the default setting). In case FFI is not completely disabled, it's also enabled for CLI scripts. Finally, the restriction affects only FFI functions their selves, but not the overloaded method of created FFI or CData objects.
+
 ### Status
 
 In current state, access to FFI data structures is significantly (about 2 times) slower, than access to PHP arrays and objects. It make no sense to use them for speed, but may make sense to reduce memory consumption.
