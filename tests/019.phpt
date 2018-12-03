@@ -2,6 +2,8 @@
 FFI 019: Parameter type adjustment
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 try {

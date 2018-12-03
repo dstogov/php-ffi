@@ -2,6 +2,8 @@
 FFI 025: direct work with primitive types
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 	$x = FFI::new("int");

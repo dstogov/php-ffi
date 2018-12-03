@@ -2,6 +2,8 @@
 FFI 031: bit-fields packing
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 function test_size($expected_size, $type) {

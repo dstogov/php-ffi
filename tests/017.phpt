@@ -2,6 +2,8 @@
 FFI 017: Structure constraints & tags cleanup
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 try {

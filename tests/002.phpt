@@ -2,6 +2,8 @@
 FFI 002: Check C declaration parser 
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php 
 echo "Empty declaration\n";

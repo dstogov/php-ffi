@@ -2,6 +2,8 @@
 FFI 037: Type memory management
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 function foo($ptr) {

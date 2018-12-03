@@ -2,6 +2,8 @@
 FFI 301: FFI loading
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $ffi = FFI::load(__DIR__ . "/300.h");

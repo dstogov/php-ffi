@@ -2,6 +2,8 @@
 FFI 021: packed enums
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 function test($size, $type) {

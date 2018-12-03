@@ -2,6 +2,8 @@
 FFI 005: Array assignment
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php 
 $m = FFI::new("int[2][2]");

@@ -2,6 +2,8 @@
 FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::array()
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $p1 = FFI::new("uint8_t[2]");

@@ -2,6 +2,8 @@
 FFI 013: Declaration priorities and constrains
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $a = FFI::new("int[1][2][3]");

@@ -2,6 +2,8 @@
 FFI 038: Casting array to pointer
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $a = FFI::new("int[10]");

@@ -2,6 +2,8 @@
 FFI 023: GCC struct extensions
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 	var_dump(FFI::sizeof(FFI::new("struct {}")));

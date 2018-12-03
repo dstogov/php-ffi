@@ -2,6 +2,8 @@
 FFI 007: Pointer comparison
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $v = FFI::new("int*[3]");

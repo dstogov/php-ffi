@@ -2,6 +2,8 @@
 FFI 010: string()
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $a = FFI::new("int[3]");

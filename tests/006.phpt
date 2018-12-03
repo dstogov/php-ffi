@@ -2,6 +2,8 @@
 FFI 006: Pointer assignment
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php 
 $v = FFI::new("int*[2]");

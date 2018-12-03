@@ -9,6 +9,8 @@ try {
 	die('skip PHP symbols not available');
 }
 ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $zend = new FFI("

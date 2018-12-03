@@ -2,6 +2,8 @@
 FFI 036: Type memory management
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $type = FFI::type("int*");

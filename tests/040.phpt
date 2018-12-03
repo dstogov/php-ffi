@@ -2,6 +2,8 @@
 FFI 040: Support for scalar types
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $x = FFI::new("int");

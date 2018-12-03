@@ -2,6 +2,8 @@
 FFI 022: structure/union alignment
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 function test_size($size, $type) {

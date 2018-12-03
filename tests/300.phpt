@@ -4,6 +4,7 @@ FFI 300: FFI preloading
 <?php require_once('skipif.inc'); ?>
 <?php if (!extension_loaded('Zend OPcache')) die('skip Zend OPcache extension not available'); ?>
 --INI--
+ffi.enable=1
 opcache.enable=1
 opcache.enable_cli=1
 opcache.optimization_level=-1

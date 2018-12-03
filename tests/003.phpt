@@ -2,6 +2,8 @@
 FFI 003: Forward tag/typedef declarations
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php 
 $ffi = new FFI(<<<EOF

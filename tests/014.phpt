@@ -2,6 +2,8 @@
 FFI 014: Size of nested types
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 var_dump(FFI::sizeof(FFI::new("uint32_t[2]")));

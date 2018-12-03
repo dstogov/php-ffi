@@ -2,6 +2,8 @@
 FFI 035: FFI::new() not-owned
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $p = FFI::new("uint16_t[2]", false);

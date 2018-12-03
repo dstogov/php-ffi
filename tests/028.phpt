@@ -2,6 +2,8 @@
 FFI 028: Incomplete arrays inside structure
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 try {

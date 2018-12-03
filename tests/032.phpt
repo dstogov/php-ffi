@@ -2,6 +2,8 @@
 FFI 032: bit-fields access
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $p = FFI::new("

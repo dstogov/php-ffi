@@ -2,6 +2,8 @@
 FFI 024: anonymous struct/union
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 	$p = FFI::new("

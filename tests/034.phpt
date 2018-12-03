@@ -2,6 +2,8 @@
 FFI 034: FFI::sizeof(), FFI::alignof()
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
+--INI--
+ffi.enable=1
 --FILE--
 <?php
 $p1 = FFI::new("uint8_t[2]");
