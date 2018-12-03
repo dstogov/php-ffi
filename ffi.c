@@ -27,6 +27,7 @@
 #include "zend_exceptions.h"
 #include "zend_interfaces.h"
 #include "zend_closures.h"
+#include "main/SAPI.h"
 
 #include <ffi.h>
 
@@ -2505,6 +2506,36 @@ static zend_function *zend_ffi_get_func(zend_object **obj, zend_string *name, co
 }
 /* }}} */
 
+static zend_never_inline int zend_ffi_disabled(void) /* {{{ */
+{
+	zend_throw_error(zend_ffi_exception_ce, "FFI API is restricted by \"ffi.enable\" configuration directive");
+	return 0;
+}
+/* }}} */
+
+static zend_always_inline int zend_ffi_validate_api_restriction(zend_execute_data *execute_data) /* {{{ */
+{
+	if (EXPECTED(FFI_G(restriction) > ZEND_FFI_ENABLED)) {
+		ZEND_ASSERT(FFI_G(restriction) == ZEND_FFI_PRELOAD);
+		if (FFI_G(is_cli)
+		 || (execute_data->prev_execute_data
+		  && (execute_data->prev_execute_data->func->common.fn_flags & ZEND_ACC_PRELOADED))
+		 || (CG(compiler_options) & ZEND_COMPILE_PRELOAD)) {
+			return 1;
+		}
+	} else if (EXPECTED(FFI_G(restriction) == ZEND_FFI_ENABLED)) {
+		return 1;
+	}
+	return zend_ffi_disabled();
+}
+/* }}} */
+
+#define ZEND_FFI_VALIDATE_API_RESTRICTION() do { \
+		if (UNEXPECTED(!zend_ffi_validate_api_restriction(execute_data))) { \
+			return; \
+		} \
+	} while (0)
+
 ZEND_METHOD(FFI, __construct) /* {{{ */
 {
 	zend_string *code = NULL;
@@ -2512,6 +2543,7 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 	zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
 	void *addr;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_STR(code)
@@ -2777,6 +2809,7 @@ ZEND_METHOD(FFI, load) /* {{{ */
 	zend_ffi_tag *tag;
 	void *addr;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(fn)
 	ZEND_PARSE_PARAMETERS_END();
@@ -3030,6 +3063,7 @@ ZEND_METHOD(FFI, scope) /* {{{ */
 	zend_ffi_scope *scope = NULL;
 	zend_ffi *ffi;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_STR(scope_name)
 	ZEND_PARSE_PARAMETERS_END();
@@ -3234,6 +3268,7 @@ ZEND_METHOD(FFI, new) /* {{{ */
 	zend_bool is_const = 0;
 	zend_ffi_flags flags = ZEND_FFI_FLAG_OWNED;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 3)
 		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
 			Z_PARAM_STR(type_def)
@@ -3343,6 +3378,7 @@ ZEND_METHOD(FFI, free) /* {{{ */
 	zval *zv;
 	zend_ffi_cdata *cdata;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
 	ZEND_PARSE_PARAMETERS_END();
@@ -3381,6 +3417,7 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 	zval *zv, *arg;
 	void *ptr;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		if (Z_TYPE_P(EX_VAR_NUM(0)) == IS_STRING) {
 			Z_PARAM_STR(type_def)
@@ -3515,6 +3552,7 @@ ZEND_METHOD(FFI, type) /* {{{ */
 	zend_ffi_ctype *ctype;
 	zend_ffi_type *type;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
@@ -3604,6 +3642,7 @@ ZEND_METHOD(FFI, array) /* {{{ */
 	HashTable *dims;
 	zval *val;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(2, 2)
 		Z_PARAM_OBJECT_OF_CLASS(ztype, zend_ffi_ctype_ce)
 		Z_PARAM_ARRAY_HT(dims)
@@ -3680,6 +3719,7 @@ ZEND_METHOD(FFI, addr) /* {{{ */
 	zend_ffi_cdata *cdata, *new_cdata;
 	zval *zv, *arg;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_ZVAL(zv)
 	ZEND_PARSE_PARAMETERS_END();
@@ -3728,6 +3768,7 @@ ZEND_METHOD(FFI, sizeof) /* {{{ */
 	zval *zv;
 	zend_ffi_type *type;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
@@ -3753,6 +3794,7 @@ ZEND_METHOD(FFI, alignof) /* {{{ */
 	zval *zv;
 	zend_ffi_type *type;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 1)
 		Z_PARAM_ZVAL(zv);
 	ZEND_PARSE_PARAMETERS_END();
@@ -3781,6 +3823,7 @@ ZEND_METHOD(FFI, memcpy) /* {{{ */
 	void *ptr1, *ptr2;
 	zend_long size;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(3, 3)
 		Z_PARAM_OBJECT_OF_CLASS_EX2(zv1, zend_ffi_cdata_ce, 0, 1, 0);
 		Z_PARAM_ZVAL(zv2)
@@ -3836,6 +3879,7 @@ ZEND_METHOD(FFI, memcmp) /* {{{ */
 	zend_long size;
 	int ret;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(3, 3)
 		Z_PARAM_ZVAL(zv1);
 		Z_PARAM_ZVAL(zv2);
@@ -3909,6 +3953,7 @@ ZEND_METHOD(FFI, memset) /* {{{ */
 	void *ptr;
 	zend_long ch, size;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(3, 3)
 		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
 		Z_PARAM_LONG(ch)
@@ -3939,6 +3984,7 @@ ZEND_METHOD(FFI, string) /* {{{ */
 	void *ptr;
 	zend_long size = 0;
 
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
 	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_OBJECT_OF_CLASS_EX2(zv, zend_ffi_cdata_ce, 0, 1, 0);
 		Z_PARAM_OPTIONAL
@@ -4328,11 +4374,42 @@ static HashTable *zend_ffi_free_get_debug_info(zval *object, int *is_temp) /* {{
 }
 /* }}} */
 
+static ZEND_INI_MH(OnUpdateFFIEnable) /* {{{ */
+{
+	if (zend_string_equals_literal_ci(new_value, "preload")) {
+		FFI_G(restriction) = ZEND_FFI_PRELOAD;
+	} else {
+		FFI_G(restriction) = (zend_ffi_api_restriction)zend_ini_parse_bool(new_value);
+	}
+	return SUCCESS;
+}
+/* }}} */
+
+static ZEND_INI_DISP(zend_ffi_enable_displayer_cb) /* {{{ */
+{
+	if (FFI_G(restriction) == ZEND_FFI_PRELOAD) {
+		ZEND_PUTS("preload");
+	} else if (FFI_G(restriction) == ZEND_FFI_ENABLED) {
+		ZEND_PUTS("On");
+	} else {
+		ZEND_PUTS("Off");
+	}
+}
+/* }}} */
+
+ZEND_INI_BEGIN()
+	ZEND_INI_ENTRY3_EX("ffi.enable", "preload", ZEND_INI_ALL, OnUpdateFFIEnable, NULL, NULL, NULL, zend_ffi_enable_displayer_cb)
+ZEND_INI_END()
+
 /* {{{ ZEND_MINIT_FUNCTION
  */
 ZEND_MINIT_FUNCTION(ffi)
 {
 	zend_class_entry ce;
+
+	REGISTER_INI_ENTRIES();
+
+	FFI_G(is_cli) = strcmp(sapi_module.name, "cli") == 0;
 
 	INIT_NS_CLASS_ENTRY(ce, "FFI", "Exception", NULL);
 	zend_ffi_exception_ce = zend_register_internal_class_ex(&ce, zend_ce_error);

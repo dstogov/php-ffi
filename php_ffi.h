@@ -19,9 +19,18 @@
 #ifndef PHP_FFI_H
 #define PHP_FFI_H
 
+typedef enum _zend_ffi_api_restriction {
+	ZEND_FFI_DISABLED = 0,  /* completely disabled */
+	ZEND_FFI_ENABLED = 1,   /* enabled everywhere */
+	ZEND_FFI_PRELOAD = 2,   /* enabled only in preloaded scripts and CLI */
+} zend_ffi_api_restriction;
+
 typedef struct _zend_ffi_type  zend_ffi_type;
 
 ZEND_BEGIN_MODULE_GLOBALS(ffi)
+	zend_ffi_api_restriction restriction;
+	zend_bool is_cli;
+
 	/* predefined ffi_types */
 	HashTable types;
 
