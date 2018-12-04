@@ -105,11 +105,16 @@ $libc = new FFI("extern int errno;", "libc.so.6");
 var_dump($libc->errno);
 ```
 
-##### function FFI::type(mixed $type): FFI\CType
+##### function FFI::type(string $type): FFI\CType
 
-This function returns a **FFI\CType** object that represent corresponding C type. The first argument may be a **string** (a new object is going to be created from this C definition) or **FFI\CData** object (function will return the type of the C data object).
+This function creates and returns a **FFI\CType** object, representng type of the given C type declaration string.
 
 FFI::type() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+
+
+##### function FFI::typeof(FFI\CData $type): FFI\CType
+
+This function returns a **FFI\CType** object, representing the type of the given **FFI\CData** object.
 
 ##### static function FFI::array(FFI\CType $type, array $dims): FFI\CType
 

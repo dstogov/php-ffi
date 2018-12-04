@@ -1,5 +1,5 @@
 --TEST--
-FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::array()
+FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::typeof(), FFI::array()
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
 --INI--
@@ -10,7 +10,7 @@ $p1 = FFI::new("uint8_t[2]");
 $p2 = FFI::new("uint16_t[2]", true, true);
 var_dump($p1, $p2);
 
-$t1 = FFI::type($p1);
+$t1 = FFI::typeof($p1);
 var_dump($t1);
 
 $p4 = FFI::new($t1);

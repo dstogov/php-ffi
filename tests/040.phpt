@@ -9,7 +9,7 @@ ffi.enable=1
 $x = FFI::new("int");
 $x = 5;
 var_dump($x);
-var_dump(FFI::type($x));
+var_dump(FFI::typeof($x));
 var_dump(FFI::cast("int8_t[4]", $x));
 $p = FFI::addr($x);
 var_dump($p);
@@ -25,7 +25,7 @@ echo "\n";
 $y = FFI::new("int[2]");
 $y[0] = 6;
 var_dump($y[0]);
-var_dump(FFI::type($y[0]));
+var_dump(FFI::typeof($y[0]));
 var_dump(FFI::cast("int8_t[4]", $y[0]));
 $p = FFI::addr($y[0]);
 var_dump($p);

@@ -3548,6 +3548,65 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 ZEND_METHOD(FFI, type) /* {{{ */
 {
+	zend_ffi_ctype *ctype;
+	zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
+	zend_string *type_def;
+
+	ZEND_FFI_VALIDATE_API_RESTRICTION();
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STR(type_def);
+	ZEND_PARSE_PARAMETERS_END();
+
+	if (Z_TYPE(EX(This)) == IS_OBJECT) {
+		zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
+		FFI_G(symbols) = ffi->symbols;
+		FFI_G(tags) = ffi->tags;
+	} else {
+		FFI_G(symbols) = NULL;
+		FFI_G(tags) = NULL;
+	}
+
+	FFI_G(default_type_attr) = 0;
+
+	if (zend_ffi_parse_type(ZSTR_VAL(type_def), ZSTR_LEN(type_def), &dcl) != SUCCESS) {
+		zend_ffi_type_dtor(dcl.type);
+		if (Z_TYPE(EX(This)) != IS_OBJECT) {
+			if (FFI_G(tags)) {
+				zend_hash_destroy(FFI_G(tags));
+				efree(FFI_G(tags));
+				FFI_G(tags) = NULL;
+			}
+			if (FFI_G(symbols)) {
+				zend_hash_destroy(FFI_G(symbols));
+				efree(FFI_G(symbols));
+				FFI_G(symbols) = NULL;
+			}
+		}
+		return;
+	}
+
+	if (Z_TYPE(EX(This)) != IS_OBJECT) {
+		if (FFI_G(tags)) {
+			zend_ffi_tags_cleanup(&dcl);
+		}
+		if (FFI_G(symbols)) {
+			zend_hash_destroy(FFI_G(symbols));
+			efree(FFI_G(symbols));
+			FFI_G(symbols) = NULL;
+		}
+	}
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
+
+	ctype = (zend_ffi_ctype*)zend_ffi_ctype_new(zend_ffi_ctype_ce);
+	ctype->type = dcl.type;
+
+	RETURN_OBJ(&ctype->std);
+}
+/* }}} */
+
+ZEND_METHOD(FFI, typeof) /* {{{ */
+{
 	zval *zv, *arg;
 	zend_ffi_ctype *ctype;
 	zend_ffi_type *type;
@@ -3559,54 +3618,7 @@ ZEND_METHOD(FFI, type) /* {{{ */
 
 	arg = zv;
 	ZVAL_DEREF(zv);
-	if (Z_TYPE_P(zv) == IS_STRING) {
-		zend_string *type_def = Z_STR_P(zv);
-
-		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
-
-		if (Z_TYPE(EX(This)) == IS_OBJECT) {
-			zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
-			FFI_G(symbols) = ffi->symbols;
-			FFI_G(tags) = ffi->tags;
-		} else {
-			FFI_G(symbols) = NULL;
-			FFI_G(tags) = NULL;
-		}
-
-		FFI_G(default_type_attr) = 0;
-
-		if (zend_ffi_parse_type(ZSTR_VAL(type_def), ZSTR_LEN(type_def), &dcl) != SUCCESS) {
-			zend_ffi_type_dtor(dcl.type);
-			if (Z_TYPE(EX(This)) != IS_OBJECT) {
-				if (FFI_G(tags)) {
-					zend_hash_destroy(FFI_G(tags));
-					efree(FFI_G(tags));
-					FFI_G(tags) = NULL;
-				}
-				if (FFI_G(symbols)) {
-					zend_hash_destroy(FFI_G(symbols));
-					efree(FFI_G(symbols));
-					FFI_G(symbols) = NULL;
-				}
-			}
-			return;
-		}
-
-		if (Z_TYPE(EX(This)) != IS_OBJECT) {
-			if (FFI_G(tags)) {
-				zend_ffi_tags_cleanup(&dcl);
-			}
-			if (FFI_G(symbols)) {
-				zend_hash_destroy(FFI_G(symbols));
-				efree(FFI_G(symbols));
-				FFI_G(symbols) = NULL;
-			}
-		}
-		FFI_G(symbols) = NULL;
-		FFI_G(tags) = NULL;
-
-		type = dcl.type;
-	} else if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
+	if (Z_TYPE_P(zv) == IS_OBJECT && Z_OBJCE_P(zv) == zend_ffi_cdata_ce) {
 		zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(zv);
 
 		type = cdata->type;
@@ -3623,7 +3635,7 @@ ZEND_METHOD(FFI, type) /* {{{ */
 			}
 		}
 	} else {
-		zend_wrong_parameter_class_error(1, "FFI\\CData or string", zv);
+		zend_wrong_parameter_class_error(1, "FFI\\CData", zv);
 		return;
 	}
 
@@ -4047,6 +4059,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_func_cast, 0, 0, 2)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_func_type, 0, 0, 1)
+	ZEND_ARG_INFO(0, type)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_typeof, 0, 0, 1)
 	ZEND_ARG_INFO(ZEND_SEND_PREFER_REF, ptr)
 ZEND_END_ARG_INFO()
 
@@ -4098,6 +4114,7 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, free,        arginfo_func_free,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, cast,        arginfo_func_cast,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, type,        arginfo_func_type,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, typeof,      arginfo_func_typeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, array,       arginfo_func_array,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, addr,        arginfo_func_addr,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof,      arginfo_func_sizeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
