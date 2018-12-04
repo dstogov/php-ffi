@@ -116,9 +116,9 @@ FFI::type() may be called statically and use only predefined types, or as a meth
 
 This function returns a **FFI\CType** object, representing the type of the given **FFI\CData** object.
 
-##### static function FFI::array(FFI\CType $type, array $dims): FFI\CType
+##### static function FFI::array_type(FFI\CType $type, array $dims): FFI\CType
 
-Constructs a new C array type from the existing one.
+Constructs a new C array type with elements of $type and dimensions specified by $dims.
 
 ##### function FFI::new(mixed $type [, bool $own = true [, bool $persistent = false]]): FFI\CData
 

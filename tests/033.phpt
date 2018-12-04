@@ -1,5 +1,5 @@
 --TEST--
-FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::typeof(), FFI::array()
+FFI 033: FFI::new(), FFI::free(), FFI::type(), FFI::typeof(), FFI::array_type()
 --SKIPIF--
 <?php require_once('skipif.inc'); ?>
 --INI--
@@ -23,7 +23,7 @@ var_dump($p4);
 
 $t2 = FFI::type("uint32_t");
 var_dump($t2);
-$t3 = FFI::array($t2, [2, 2]);
+$t3 = FFI::array_type($t2, [2, 2]);
 var_dump($t3);
 ?>
 --EXPECTF--
