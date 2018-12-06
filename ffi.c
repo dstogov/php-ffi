@@ -2536,11 +2536,12 @@ static zend_always_inline int zend_ffi_validate_api_restriction(zend_execute_dat
 		} \
 	} while (0)
 
-ZEND_METHOD(FFI, __construct) /* {{{ */
+ZEND_METHOD(FFI, cdef) /* {{{ */
 {
 	zend_string *code = NULL;
 	zend_string *lib = NULL;
-	zend_ffi *ffi = (zend_ffi*)Z_OBJ(EX(This));
+	zend_ffi *ffi = NULL;
+	DL_HANDLE handle;
 	void *addr;
 
 	ZEND_FFI_VALIDATE_API_RESTRICTION();
@@ -2551,7 +2552,7 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (lib) {
-		DL_HANDLE handle = DL_LOAD(ZSTR_VAL(lib));
+		handle = DL_LOAD(ZSTR_VAL(lib));
 		if (!handle) {
 			zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s'", ZSTR_VAL(lib));
 			return;
@@ -2560,14 +2561,15 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 #ifdef RTLD_DEFAULT
 	} else if (1) {
 		// TODO: this might need to be disabled or protected ???
-		ffi->lib = RTLD_DEFAULT;
+		handle = RTLD_DEFAULT;
 #endif
 	}
 
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
+
 	if (code) {
 		/* Parse C definitions */
-		FFI_G(symbols) = NULL;
-		FFI_G(tags) = NULL;
 		FFI_G(default_type_attr) = ZEND_FFI_ATTR_STORED;
 
 		if (zend_ffi_parse_decl(ZSTR_VAL(code), ZSTR_LEN(code)) != SUCCESS) {
@@ -2583,24 +2585,20 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 			}
 			return;
 		}
-		ffi->symbols = FFI_G(symbols);
-		ffi->tags = FFI_G(tags);
-		FFI_G(symbols) = NULL;
-		FFI_G(tags) = NULL;
 
-		if (ffi->symbols) {
+		if (FFI_G(symbols)) {
 			zend_string *name;
 			zend_ffi_symbol *sym;
 
-			ZEND_HASH_FOREACH_STR_KEY_PTR(ffi->symbols, name, sym) {
+			ZEND_HASH_FOREACH_STR_KEY_PTR(FFI_G(symbols), name, sym) {
 				if (sym->kind == ZEND_FFI_SYM_VAR) {
-					addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+					addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
 					if (!addr) {
 						zend_throw_error(zend_ffi_exception_ce, "Failed resolving C variable '%s'", ZSTR_VAL(name));
 					}
 					sym->addr = addr;
 				} else if (sym->kind == ZEND_FFI_SYM_FUNC) {
-					addr = DL_FETCH_SYMBOL(ffi->lib, ZSTR_VAL(name));
+					addr = DL_FETCH_SYMBOL(handle, ZSTR_VAL(name));
 					if (!addr) {
 						zend_throw_error(zend_ffi_exception_ce, "Failed resolving C function '%s'", ZSTR_VAL(name));
 					}
@@ -2609,6 +2607,16 @@ ZEND_METHOD(FFI, __construct) /* {{{ */
 			} ZEND_HASH_FOREACH_END();
 		}
 	}
+
+	ffi = (zend_ffi*)zend_ffi_new(zend_ffi_ce);
+	ffi->lib = handle;
+	ffi->symbols = FFI_G(symbols);
+	ffi->tags = FFI_G(tags);
+
+	FFI_G(symbols) = NULL;
+	FFI_G(tags) = NULL;
+
+	RETURN_OBJ(&ffi->std);
 }
 /* }}} */
 
@@ -4030,7 +4038,7 @@ ZEND_METHOD(FFI, string) /* {{{ */
 }
 /* }}} */
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_func_ffi, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_func_cdef, 0, 0, 0)
 	ZEND_ARG_INFO(0, code)
 	ZEND_ARG_INFO(0, lib)
 ZEND_END_ARG_INFO()
@@ -4107,7 +4115,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_func_string, 0, 0, 1)
 ZEND_END_ARG_INFO()
 
 static const zend_function_entry zend_ffi_functions[] = {
-	ZEND_ME(FFI, __construct, arginfo_func_ffi,     ZEND_ACC_PUBLIC)
+	ZEND_ME(FFI, cdef,        arginfo_func_cdef,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, load,        arginfo_func_load,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, scope,       arginfo_func_scope,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, new,         arginfo_func_new,     ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
@@ -4450,6 +4458,7 @@ ZEND_MINIT_FUNCTION(ffi)
 	zend_ffi_type_fn.fn_flags &= ~ZEND_ACC_STATIC;
 
 	memcpy(&zend_ffi_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+	zend_ffi_handlers.get_constructor      = zend_fake_get_constructor;
 	zend_ffi_handlers.free_obj             = zend_ffi_free_obj;
 	zend_ffi_handlers.clone_obj            = NULL;
 	zend_ffi_handlers.read_property        = zend_ffi_read_var;

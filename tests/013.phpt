@@ -23,31 +23,31 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static int foo(int)[5];");
+	FFI::cdef("static int foo(int)[5];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static int foo[5](int);");
+	FFI::cdef("static int foo[5](int);");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static int foo(int)(int);");
+	FFI::cdef("static int foo(int)(int);");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("typedef int foo[2][];");
+	FFI::cdef("typedef int foo[2][];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("typedef int foo[][2];");
+	FFI::cdef("typedef int foo[][2];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";

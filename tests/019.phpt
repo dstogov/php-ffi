@@ -7,13 +7,13 @@ ffi.enable=1
 --FILE--
 <?php
 try {
-	new FFI("static int foo(int[]);");
+	FFI::cdef("static int foo(int[]);");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static int foo(int bar(int));");
+	FFI::cdef("static int foo(int bar(int));");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";

@@ -4,7 +4,7 @@ FFI 100: PHP symbols
 <?php require_once('skipif.inc'); ?>
 <?php
 try {
-	new FFI("extern void *zend_printf;");
+	FFI::cdef("extern void *zend_printf;");
 } catch (Throwable $e) {
 	die('skip PHP symbols not available');
 }
@@ -13,7 +13,7 @@ try {
 ffi.enable=1
 --FILE--
 <?php
-$zend = new FFI("
+$zend = FFI::cdef("
 	const char *get_zend_version(void);
 	//char *get_zend_version(void);
 	extern size_t (*zend_printf)(const char *format, ...);

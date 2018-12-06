@@ -1,5 +1,5 @@
 <?php
-$ffi = new FFI("
+$ffi = FFI::cdef("
 
     int printf(const char *format, ...);
     const char * getenv(const char *);

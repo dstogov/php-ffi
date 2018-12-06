@@ -51,7 +51,7 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	$f = new FFI("typedef int * const t[1];");
+	$f = FFI::cdef("typedef int * const t[1];");
 	$p = $f->new("t");
 	$p[0] = null;
 	echo "ok\n";

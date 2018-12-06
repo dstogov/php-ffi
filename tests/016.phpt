@@ -7,19 +7,19 @@ ffi.enable=1
 --FILE--
 <?php
 try {
-	new FFI("struct X {void x();};");
+	FFI::cdef("struct X {void x();};");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("struct X {struct X x;};");
+	FFI::cdef("struct X {struct X x;};");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("struct X {struct X *ptr;};");
+	FFI::cdef("struct X {struct X *ptr;};");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";

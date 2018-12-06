@@ -6,7 +6,7 @@ FFI 029: _Alignas
 ffi.enable=1
 --FILE--
 <?php
-$ffi = new FFI("
+$ffi = FFI::cdef("
 	typedef char t1;
 	typedef char _Alignas(int) t2;
 ");

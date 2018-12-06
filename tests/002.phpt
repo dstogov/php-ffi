@@ -7,13 +7,13 @@ ffi.enable=1
 --FILE--
 <?php 
 echo "Empty declaration\n";
-$ffi = new FFI(<<<EOF
+$ffi = FFI::cdef(<<<EOF
 EOF
 );
 echo "  ok\n";
 
 echo "Various declarations\n";
-$ffi = new FFI(<<<EOF
+$ffi = FFI::cdef(<<<EOF
 	/* allowed storage classes */
 	typedef  int type1;
 //	extern   int var2;

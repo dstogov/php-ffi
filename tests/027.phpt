@@ -13,19 +13,19 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static int (*foo)[*];");
+	FFI::cdef("static int (*foo)[*];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("typedef int foo[*];");
+	FFI::cdef("typedef int foo[*];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("static void foo(int[*][*]);");
+	FFI::cdef("static void foo(int[*][*]);");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
@@ -46,31 +46,31 @@ try {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	new FFI("struct _x {int a; int b[];};");
+	FFI::cdef("struct _x {int a; int b[];};");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	$f = new FFI("typedef int(*foo)[];");
+	$f = FFI::cdef("typedef int(*foo)[];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	$f = new FFI("typedef int foo[][2];");
+	$f = FFI::cdef("typedef int foo[][2];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	$f = new FFI("typedef int foo[];");
+	$f = FFI::cdef("typedef int foo[];");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";
 }
 try {
-	$f = new FFI("static int foo(int[]);");
+	$f = FFI::cdef("static int foo(int[]);");
 	echo "ok\n";
 } catch (Throwable $e) {
 	echo get_class($e) . ": " . $e->getMessage()."\n";

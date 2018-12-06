@@ -6,7 +6,7 @@ FFI 004: Enum declarations
 ffi.enable=1
 --FILE--
 <?php 
-$ffi = new FFI(<<<EOF
+$ffi = FFI::cdef(<<<EOF
 enum _a;
 enum _a {e1};
 

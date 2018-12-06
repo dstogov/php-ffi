@@ -13,7 +13,7 @@ class DList {
 	function __construct() {
 		if (is_null(self::$ffi)) {
 			self::$ffi =
-				new FFI("
+				FFI::cdef("
 					typedef struct _dlist dlist;
 					struct _dlist {
 						int data;

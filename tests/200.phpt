@@ -4,7 +4,7 @@ FFI 200: PHP callbacks
 <?php require_once('skipif.inc'); ?>
 <?php
 try {
-	new FFI("void* zend_write;");
+	FFI::cdef("void* zend_write;");
 } catch (Throwable $e) {
 	die('skip PHP symbols not available');
 }
@@ -13,7 +13,7 @@ try {
 ffi.enable=1
 --FILE--
 <?php
-$zend = new FFI("
+$zend = FFI::cdef("
 	typedef int (*zend_write_func_t)(const char *str, size_t str_length);
 	extern zend_write_func_t zend_write;
 ");

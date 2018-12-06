@@ -6,7 +6,7 @@ FFI 003: Forward tag/typedef declarations
 ffi.enable=1
 --FILE--
 <?php 
-$ffi = new FFI(<<<EOF
+$ffi = FFI::cdef(<<<EOF
 struct _a;
 struct _a {int x;};
 

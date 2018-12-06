@@ -4,7 +4,7 @@ FFI PHP extension provides a simple way to call native functions, access native 
 
 ```php
 <?php
-$libc = new FFI("
+$libc = FFI::cdef("
     int printf(const char *format, ...);
     const char * getenv(const char *);
     unsigned int time(unsigned int *);
@@ -50,9 +50,9 @@ object(FFI\CData:<struct>)#3 (2) {
 }
 ```
 
-FFI::\__constructor() takes two arguments (both are optional). The first one is a collection of C declarations and the second is DSO library. All variables and functions defined by first arguments are bound to corresponding native symbols in DSO library and then may be accessed as FFI object methods and properties. C types of argument, return value and variables are automatically converted to/from PHP types (if possible). Otherwise, they are wrapped in a special CData proxy object and may be accessed by elements.
+FFI::cdef() takes two arguments (both are optional). The first one is a collection of C declarations and the second is DSO library. All variables and functions defined by first arguments are bound to corresponding native symbols in DSO library and then may be accessed as FFI object methods and properties. C types of argument, return value and variables are automatically converted to/from PHP types (if possible). Otherwise, they are wrapped in a special CData proxy object and may be accessed by elements.
 
-In some cases (e.g. passing C structure by pointer) we may need to create a real C data structures. This is possible using FFF::new() method. It takes a C type definition and may reuse C types and tags defined by FFI::\__constructor().
+In some cases (e.g. passing C structure by pointer) we may need to create a real C data structures. This is possible using FFF::new() method. It takes a C type definition and may reuse C types and tags defined by FFI::cdef().
 
 It's also possible to use FFI::new() as a static method to create arbitrary C data structures.
 
@@ -85,23 +85,23 @@ object(FFI\CData:<struct>[2])#1 (2) {
 
 ### API Reference
 
-##### function FFI::__construct([string $cdef = "" [, string $lib = null]])
+##### function FFI::cdef([string $cdef = "" [, string $lib = null]]): FFI
 
 ##### Call Native Functions
 
-All functions defined in FFI constructor may be called as methods of the created FFI object.
+All functions defined in FFI::cdef() may be called as methods of the created FFI object.
 
 ```php
-$libc = new FFI("const char * getenv(const char *);", "libc.so.6");
+$libc = FFI::cdef("const char * getenv(const char *);", "libc.so.6");
 var_dump($libc->getenv("PATH"));
 ```
 
 ##### Read/Write Values of Native Variables
 
-All functions defined in FFI constructor may be accessed as properties of the created FFI object.
+All functions defined in FFI::cdef() may be accessed as properties of the created FFI object.
 
 ```php
-$libc = new FFI("extern int errno;", "libc.so.6");
+$libc = FFI::cdef("extern int errno;", "libc.so.6");
 var_dump($libc->errno);
 ```
 
@@ -109,7 +109,7 @@ var_dump($libc->errno);
 
 This function creates and returns a **FFI\CType** object, representng type of the given C type declaration string.
 
-FFI::type() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+FFI::type() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI::cdef().
 
 
 ##### function FFI::typeof(FFI\CData $type): FFI\CType
@@ -129,7 +129,7 @@ $p = FFI::new("int[2][2]");
 var_dump($p, FFI::sizeof($p));
 ```
 
-FFI::new() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+FFI::new() may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI::cdef().
 
 By default **FFI::new()** creates "owned" native data structures, that live together with corresponding PHP object, reusing PHP reference-counting and GC. However, in some cases it may be necessary to manually control the life time of the data structure. In this case, the PHP ownership on the corresponding data, may be manually changed, using **false** as the second optianal argument. Later, not-owned CData should be manually deallocated using **FFI::free()**.
 
@@ -198,7 +198,7 @@ creates a PHP string from $size bytes of memory area pointed by $src. If size is
 
 Casts given $cdata to another C type, specified by C declaration **string** or **FFI\CType** object.
 
-This function may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI constructor.
+This function may be called statically and use only predefined types, or as a method of previously created FFI object. In last case the first argument may reuse all type and tag names defined in FFI::cdef().
 
 ##### static function addr(FFI\CData $cdata): FFI\CData;
 
@@ -206,7 +206,7 @@ Returns C pointer to the given C data structure. The pointer is not "owned" and 
 
 ##### static function load(string $filename): FFI;
 
-Instead of embedding of a long C definition into PHP string, and creating FFI through constructor, it's possible to separate it into a C header file. Note, that C preprocessor directives (e.g. #define or #ifdef) are not supported. And only a couple of special macros may be used especially for FFI.
+Instead of embedding of a long C definition into PHP string, and creating FFI through FFI::cdef(), it's possible to separate it into a C header file. Note, that C preprocessor directives (e.g. #define or #ifdef) are not supported. And only a couple of special macros may be used especially for FFI.
 
 ``` C
 #define FFI_LIB "libc.so.6"
