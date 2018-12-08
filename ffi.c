@@ -2541,7 +2541,7 @@ ZEND_METHOD(FFI, cdef) /* {{{ */
 	zend_string *code = NULL;
 	zend_string *lib = NULL;
 	zend_ffi *ffi = NULL;
-	DL_HANDLE handle;
+	DL_HANDLE handle = NULL;
 	void *addr;
 
 	ZEND_FFI_VALIDATE_API_RESTRICTION();
