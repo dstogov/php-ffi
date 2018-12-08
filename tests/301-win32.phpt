@@ -10,7 +10,7 @@ ffi.enable=1
 $fn = __DIR__ . "/300-win32.h";
 $cont = str_replace(
 		"PHP_DLL_NAME",
-		"php" . PHP_MAJOR_VERSION . (PHP_ZTS ? "ts" : "") . ".dll",
+		"php" . PHP_MAJOR_VERSION . (PHP_ZTS ? "ts" : "") . (PHP_DEBUG ? "_debug" : "") . ".dll",
 		file_get_contents("$fn.in")
 	);
 file_put_contents($fn, $cont);
