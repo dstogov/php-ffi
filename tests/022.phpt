@@ -60,8 +60,10 @@ test_align(4, "struct  {char a; uint32_t b __attribute__((aligned(1)));}");
 test_size(32, "struct {char a; uint32_t b __attribute__((aligned(16)));}");
 test_align(16, "struct {char a; uint32_t b __attribute__((aligned(16)));}");
 
-test_size(32, "struct  {char a; uint32_t b __attribute__((aligned));}");
-test_align(16, "struct  {char a; uint32_t b __attribute__((aligned));}");
+if (substr(PHP_OS, 0, 3) != 'WIN') {
+	test_size(32, "struct  {char a; uint32_t b __attribute__((aligned));}");
+	test_align(16, "struct  {char a; uint32_t b __attribute__((aligned));}");
+}
 ?>
 ok
 --EXPECT--
