@@ -3654,7 +3654,7 @@ ZEND_METHOD(FFI, typeof) /* {{{ */
 }
 /* }}} */
 
-ZEND_METHOD(FFI, array_type) /* {{{ */
+ZEND_METHOD(FFI, arrayType) /* {{{ */
 {
 	zval *ztype;
 	zend_ffi_ctype *ctype;
@@ -4123,7 +4123,7 @@ static const zend_function_entry zend_ffi_functions[] = {
 	ZEND_ME(FFI, cast,        arginfo_func_cast,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, type,        arginfo_func_type,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, typeof,      arginfo_func_typeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
-	ZEND_ME(FFI, array_type,  arginfo_func_array,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+	ZEND_ME(FFI, arrayType,   arginfo_func_array,   ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, addr,        arginfo_func_addr,    ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, sizeof,      arginfo_func_sizeof,  ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(FFI, alignof,     arginfo_func_alignof, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
