@@ -2557,7 +2557,6 @@ ZEND_METHOD(FFI, cdef) /* {{{ */
 			zend_throw_error(zend_ffi_exception_ce, "Failed loading '%s'", ZSTR_VAL(lib));
 			return;
 		}
-		ffi->lib = handle;
 #ifdef RTLD_DEFAULT
 	} else if (1) {
 		// TODO: this might need to be disabled or protected ???
