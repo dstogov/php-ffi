@@ -5785,6 +5785,21 @@ void zend_ffi_add_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t na
 }
 /* }}} */
 
+void zend_ffi_add_msvc_attribute_value(zend_ffi_dcl *dcl, const char *name, size_t name_len, zend_ffi_val *val) /* {{{ */
+{
+	if (name_len == sizeof("align")-1 && memcmp(name, "align", sizeof("align")-1) == 0) {
+		if ((val->kind == ZEND_FFI_VAL_INT32 || val->kind == ZEND_FFI_VAL_UINT32 || val->kind == ZEND_FFI_VAL_INT64 || val->kind == ZEND_FFI_VAL_UINT64)
+		 && val->i64 > 0 && val->i64 <= 0x80000000 && (val->i64 & (val->i64 - 1)) == 0) {
+			dcl->align = val->i64;
+		} else {
+			zend_ffi_parser_error("incorrect 'alignemnt' value at line %d", FFI_G(line));
+		}
+	} else {
+		/* ignore */
+	}
+}
+/* }}} */
+
 static int zend_ffi_nested_type(zend_ffi_type *type, zend_ffi_type *nested_type) /* {{{ */
 {
 	nested_type = ZEND_FFI_TYPE(nested_type);

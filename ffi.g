@@ -465,6 +465,9 @@ type_name(zend_ffi_dcl *dcl):
 ;
 
 attributes(zend_ffi_dcl *dcl):
+	{const char *name;}
+	{size_t name_len;}
+	{zend_ffi_val val;}
 	(
 		("__attribute"|"__attribute__")
 		"("
@@ -474,6 +477,17 @@ attributes(zend_ffi_dcl *dcl):
 			attrib(dcl)
 		)*
 		")"
+		")"
+	|	"__declspec"
+		"("
+			(	ID(&name, &name_len)
+				(
+					"("
+						assignment_expression(&val)
+						{zend_ffi_add_msvc_attribute_value(dcl, name, name_len, &val);}
+					")"
+				)?
+			)+
 		")"
 	)++
 ;

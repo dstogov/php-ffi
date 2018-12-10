@@ -64,6 +64,9 @@ if (substr(PHP_OS, 0, 3) != 'WIN') {
 	test_size(32, "struct  {char a; uint32_t b __attribute__((aligned));}");
 	test_align(16, "struct  {char a; uint32_t b __attribute__((aligned));}");
 }
+
+test_size(16, "struct  __declspec(align(16)) {char a; uint32_t b;}");
+test_align(16, "struct  __declspec(align(16)) {char a; uint32_t b;}");
 ?>
 ok
 --EXPECT--
