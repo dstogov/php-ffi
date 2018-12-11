@@ -2272,39 +2272,47 @@ again:
 }
 /* }}} */
 
-static int zend_ffi_pass_var_arg(zval *arg, ffi_type **pass_type, void **pass_val) /* {{{ */
+static int zend_ffi_pass_var_arg(zval *arg, ffi_type **pass_type, void **arg_values, uint32_t n) /* {{{ */
 {
 	ZVAL_DEREF(arg);
 	switch (Z_TYPE_P(arg)) {
 		case IS_NULL:
 			*pass_type = &ffi_type_pointer;
-			*(void**)pass_val = NULL;
+			*(void**)arg_values[n] = NULL;
 			break;
 		case IS_FALSE:
 			*pass_type = &ffi_type_uint8;
-			*(uint8_t*)pass_val = 0;
+			*(uint8_t*)arg_values[n] = 0;
 			break;
 		case IS_TRUE:
 			*pass_type = &ffi_type_uint8;
-			*(uint8_t*)pass_val = 1;
+			*(uint8_t*)arg_values[n] = 1;
 			break;
 		case IS_LONG:
 			if (sizeof(zend_long) == 4) {
 				*pass_type = &ffi_type_sint32;
-				*(int32_t*)pass_val = Z_LVAL_P(arg);
+				*(int32_t*)arg_values[n] = Z_LVAL_P(arg);
 			} else {
 				*pass_type = &ffi_type_sint64;
-				*(int64_t*)pass_val = Z_LVAL_P(arg);
+				*(int64_t*)arg_values[n] = Z_LVAL_P(arg);
 			}
 			break;
 		case IS_DOUBLE:
 			*pass_type = &ffi_type_double;
-			*(double*)pass_val = Z_DVAL_P(arg);
+			*(double*)arg_values[n] = Z_DVAL_P(arg);
 			break;
 		case IS_STRING:
 			*pass_type = &ffi_type_pointer;
-			*(char**)pass_val = Z_STRVAL_P(arg);
+			*(char**)arg_values[n] = Z_STRVAL_P(arg);
 			break;
+		case IS_OBJECT:
+			if (Z_OBJCE_P(arg) == zend_ffi_cdata_ce) {
+				zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(arg);
+				zend_ffi_type *type = ZEND_FFI_TYPE(cdata->type);
+
+				return zend_ffi_pass_arg(arg, type, pass_type, arg_values, n);
+			}
+			/* break missing intentionally */
 		default:
 			zend_throw_error(zend_ffi_exception_ce, "FFI internal error");
 			return FAILURE;
@@ -2354,7 +2362,7 @@ static ZEND_FUNCTION(ffi_trampoline) /* {{{ */
 			}
 			for (; n < EX_NUM_ARGS(); n++) {
 				arg_values[n] = ((char*)arg_values) + (sizeof(void*) * EX_NUM_ARGS()) + (FFI_SIZEOF_ARG * n);
-				if (zend_ffi_pass_var_arg(EX_VAR_NUM(n), &arg_types[n], arg_values[n]) != SUCCESS) {
+				if (zend_ffi_pass_var_arg(EX_VAR_NUM(n), &arg_types[n], arg_values, n) != SUCCESS) {
 					free_alloca(arg_types, arg_types_use_heap);
 					free_alloca(arg_values, arg_values_use_heap);
 					return;
