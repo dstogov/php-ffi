@@ -3444,9 +3444,6 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 
 	arg = zv;
 	ZVAL_DEREF(zv);
-	if (Z_TYPE_P(zv) != IS_OBJECT || Z_OBJCE_P(zv) != zend_ffi_cdata_ce) {
-		zend_wrong_parameter_class_error(2, "FFI\\CData", zv);
-	}
 
 	if (type_def) {
 		zend_ffi_dcl dcl = ZEND_FFI_ATTR_INIT;
@@ -3512,6 +3509,44 @@ ZEND_METHOD(FFI, cast) /* {{{ */
 					ctype->type = type_ptr = type = zend_ffi_remember_type(type);
 				}
 			}
+		}
+	}
+
+	if (Z_TYPE_P(zv) != IS_OBJECT || Z_OBJCE_P(zv) != zend_ffi_cdata_ce) {
+		if (type->kind < ZEND_FFI_TYPE_POINTER && Z_TYPE_P(zv) < IS_STRING) {
+			/* numeric conversion */
+			cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+			cdata->std.handlers = &zend_ffi_cdata_value_handlers;
+			cdata->type = type_ptr;
+			cdata->ptr = emalloc(type->size);
+			zend_ffi_zval_to_cdata(cdata->ptr, type, zv);
+			cdata->flags = ZEND_FFI_FLAG_OWNED;
+			if (is_const) {
+				cdata->flags |= ZEND_FFI_FLAG_CONST;
+			}
+			RETURN_OBJ(&cdata->std);
+		} else if (type->kind == ZEND_FFI_TYPE_POINTER && Z_TYPE_P(zv) == IS_LONG) {
+			/* number to pointer conversion */
+			cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+			cdata->type = type_ptr;
+			cdata->ptr = &cdata->ptr_holder;
+			cdata->ptr_holder = (void*)(intptr_t)Z_LVAL_P(zv);
+			if (is_const) {
+				cdata->flags |= ZEND_FFI_FLAG_CONST;
+			}
+			RETURN_OBJ(&cdata->std);
+		} else if (type->kind == ZEND_FFI_TYPE_POINTER && Z_TYPE_P(zv) == IS_NULL) {
+			/* null -> pointer */
+			cdata = (zend_ffi_cdata*)zend_ffi_cdata_new(zend_ffi_cdata_ce);
+			cdata->type = type_ptr;
+			cdata->ptr = &cdata->ptr_holder;
+			cdata->ptr_holder = NULL;
+			if (is_const) {
+				cdata->flags |= ZEND_FFI_FLAG_CONST;
+			}
+			RETURN_OBJ(&cdata->std);
+		} else {
+			zend_wrong_parameter_class_error(2, "FFI\\CData", zv);
 		}
 	}
 
