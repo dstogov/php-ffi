@@ -3408,7 +3408,7 @@ ZEND_METHOD(FFI, free) /* {{{ */
 		if (cdata->ptr != (void*)&cdata->ptr_holder) {
 			pefree(*(void**)cdata->ptr, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
 		} else {
-			pefree(cdata->ptr_holder, cdata->flags & ZEND_FFI_FLAG_PERSISTENT);
+			pefree(cdata->ptr_holder, (cdata->flags & ZEND_FFI_FLAG_PERSISTENT) || !is_zend_ptr(cdata->ptr_holder));
 		}
 		*(void**)cdata->ptr = NULL;
 	} else if (!(cdata->flags & ZEND_FFI_FLAG_OWNED)) {
