@@ -4430,7 +4430,7 @@ static ZEND_INI_DISP(zend_ffi_enable_displayer_cb) /* {{{ */
 /* }}} */
 
 ZEND_INI_BEGIN()
-	ZEND_INI_ENTRY3_EX("ffi.enable", "preload", ZEND_INI_ALL, OnUpdateFFIEnable, NULL, NULL, NULL, zend_ffi_enable_displayer_cb)
+	ZEND_INI_ENTRY3_EX("ffi.enable", "preload", ZEND_INI_SYSTEM, OnUpdateFFIEnable, NULL, NULL, NULL, zend_ffi_enable_displayer_cb)
 ZEND_INI_END()
 
 /* {{{ ZEND_MINIT_FUNCTION
