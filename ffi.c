@@ -997,7 +997,7 @@ static zval *zend_ffi_cdata_read_field(zval *object, zval *member, int read_type
 }
 /* }}} */
 
-static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
+static zval *zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
 {
 	zend_ffi_cdata *cdata = (zend_ffi_cdata*)Z_OBJ_P(object);
 	zend_ffi_type  *type = ZEND_FFI_TYPE(cdata->type);
@@ -1016,20 +1016,20 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 				if (UNEXPECTED(!ptr)) {
 					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 					zend_tmp_string_release(tmp_field_name);
-					return;
+					return value;
 				}
 				ptr = (void*)(*(char**)ptr);
 				if (UNEXPECTED(!ptr)) {
 					zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
 					zend_tmp_string_release(tmp_field_name);
-					return;
+					return value;
 				}
 				type = ZEND_FFI_TYPE(type->pointer.type);
 			}
 			if (UNEXPECTED(type->kind != ZEND_FFI_TYPE_STRUCT)) {
 				zend_throw_error(zend_ffi_exception_ce, "Attempt to assign field '%s' of non C struct/union", ZSTR_VAL(field_name));
 				zend_tmp_string_release(tmp_field_name);
-				return;
+				return value;
 			}
 		}
 
@@ -1037,7 +1037,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 		if (UNEXPECTED(!field)) {
 			zend_throw_error(zend_ffi_exception_ce, "Attempt to assign undefined field '%s' of C struct/union", ZSTR_VAL(field_name));
 			zend_tmp_string_release(tmp_field_name);
-			return;
+			return value;
 		}
 
 		zend_tmp_string_release(tmp_field_name);
@@ -1051,19 +1051,19 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 #if 0
 	if (UNEXPECTED(!ptr)) {
 		zend_throw_error(zend_ffi_exception_ce, "NULL pointer dereference");
-		return;
+		return value;
 	}
 #endif
 
 	if (UNEXPECTED(cdata->flags & ZEND_FFI_FLAG_CONST)) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only location");
-		return;
+		return value;
 	} else if (UNEXPECTED(field->is_const)) {
 		zend_string *tmp_field_name;
 		zend_string *field_name = zval_get_tmp_string(member, &tmp_field_name);
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only field '%s'", ZSTR_VAL(field_name));
 		zend_tmp_string_release(tmp_field_name);
-		return;
+		return value;
 	}
 
 	if (EXPECTED(!field->bits)) {
@@ -1072,6 +1072,7 @@ static void zend_ffi_cdata_write_field(zval *object, zval *member, zval *value, 
 	} else {
 		zend_ffi_zval_to_bit_field(ptr, field, value);
 	}
+	return value;
 }
 /* }}} */
 
@@ -2087,7 +2088,7 @@ static zval *zend_ffi_read_var(zval *object, zval *member, int read_type, void *
 }
 /* }}} */
 
-static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
+static zval *zend_ffi_write_var(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
 {
 	zend_ffi        *ffi = (zend_ffi*)Z_OBJ_P(object);
 	zend_string     *tmp_var_name;
@@ -2103,17 +2104,18 @@ static void zend_ffi_write_var(zval *object, zval *member, zval *value, void **c
 	if (!sym) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign undefined C variable '%s'", ZSTR_VAL(var_name));
 		zend_tmp_string_release(tmp_var_name);
-		return;
+		return value;
 	}
 
 	zend_tmp_string_release(tmp_var_name);
 
 	if (sym->is_const) {
 		zend_throw_error(zend_ffi_exception_ce, "Attempt to assign read-only C variable '%s'", ZSTR_VAL(var_name));
-		return;
+		return value;
 	}
 
 	zend_ffi_zval_to_cdata(sym->addr, ZEND_FFI_TYPE(sym->type), value);
+	return value;
 }
 /* }}} */
 
@@ -4312,10 +4314,11 @@ static ZEND_COLD zval *zend_fake_read_property(zval *object, zval *member, int t
 }
 /* }}} */
 
-static ZEND_COLD void zend_fake_write_property(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
+static ZEND_COLD zval *zend_fake_write_property(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
 {
 	zend_class_entry *ce = Z_OBJCE_P(object);
     zend_bad_array_access(ce);
+    return value;
 }
 /* }}} */
 
@@ -4408,9 +4411,10 @@ static ZEND_COLD zval *zend_ffi_free_read_property(zval *object, zval *member, i
 }
 /* }}} */
 
-static ZEND_COLD void zend_ffi_free_write_property(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
+static ZEND_COLD zval *zend_ffi_free_write_property(zval *object, zval *member, zval *value, void **cache_slot) /* {{{ */
 {
 	zend_ffi_use_after_free();
+	return value;
 }
 /* }}} */
 
