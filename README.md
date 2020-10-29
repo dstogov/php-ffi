@@ -1,5 +1,7 @@
 # FFI PHP extension (Foreign Function Interface)
 
+> This extension has been merged into php main source tree. The latest version is available as part of PHP sourcses at [php.net](https://www.php.net/downloads.php) or at [github mirror](https://github.com/php/php-src/tree/master/ext/ffi) !
+
 FFI PHP extension provides a simple way to call native functions, access native variables and create/access data structures defined in C language. The API of the extension is very simple and demonstrated by the following example and its output.
 
 ```php
